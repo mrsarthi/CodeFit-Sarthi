@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  JOB_SEEKER
+  INTERVIEWER
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole  @default(JOB_SEEKER)
+  organizationId String?
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sentFriendRequests     FriendRequest[] @relation("Sender")
+  receivedFriendRequests FriendRequest[] @relation("Receiver")
+  friends                Friend[]       @relation("User")
+  friendOf               Friend[]       @relation("Friend")
+  interviewsAsCandidate   InterviewParticipant[] @relation("Candidate")
+  interviewsAsInterviewer InterviewParticipant[] @relation("Interviewer")
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     User[]
+
+  @@map("organizations")
+}
+
+model Interview {
+  id          String          @id @default(uuid())
+  title       String
+  description String?
+  status      InterviewStatus @default(SCHEDULED)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  participants InterviewParticipant[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("interviews")
+}
+
+model InterviewParticipant {
+  id           String   @id @default(uuid())
+  interviewId  String
+  interview    Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  candidateId  String?
+  candidate    User?    @relation("Candidate", fields: [candidateId], references: [id])
+  interviewerId String?
+  interviewer  User?    @relation("Interviewer", fields: [interviewerId], references: [id])
+  joinedAt     DateTime?
+  leftAt       DateTime?
+
+  @@index([interviewId])
+  @@index([candidateId])
+  @@index([interviewerId])
+  @@map("interview_participants")
+}
+
+model FriendRequest {
+  id        String              @id @default(uuid())
+  senderId  String
+  sender    User                @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver  User                @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  status    FriendRequestStatus @default(PENDING)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+  @@map("friend_requests")
+}
+
+model Friend {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("User", fields: [userId], references: [id], onDelete: Cascade)
+  friendId  String
+  friend    User     @relation("Friend", fields: [friendId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+  @@map("friends")
+}
+
