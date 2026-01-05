@@ -94,34 +94,38 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
-    try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get('JWT_REFRESH_SECRET'),
-      });
+  try {
+    const payload = this.jwtService.verify(refreshToken, {
+      secret: this.configService.get('JWT_REFRESH_SECRET'),
+    });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          organizationId: true,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        organizationId: true,
+      },
+    });
 
-      if (!user) {
-        throw new UnauthorizedException('User not found');
-      }
-
-      const tokens = await this.generateTokens(user.id, user.email, user.role);
-
-      return tokens;
-    } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token');
+    if (!user) {
+      throw new UnauthorizedException('User not found');
     }
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    // CRITICAL FIX: Return the user object so the frontend state doesn't reset to null
+    return {
+      user,
+      ...tokens,
+    };
+  } catch (error) {
+    throw new UnauthorizedException('Invalid refresh token');
   }
+}
 
   private async generateTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
