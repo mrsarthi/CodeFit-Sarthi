@@ -18,6 +18,7 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
   const [language, setLanguage] = useState('javascript')
   const [cursors, setCursors] = useState<Map<string, { position: any; user: any }>>(new Map())
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const decorationsRef = useRef<Map<string, string[]>>(new Map())
 
   useEffect(() => {
     if (!socket || !user) {
@@ -72,13 +73,17 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
     // Listen for cursor positions
     socket.on('code:cursor', (data: any) => {
       console.log('CodeEditor: Received cursor update:', data, 'current user:', user.id)
-      if (data.userId !== user?.id) {
+      if (data.userId !== user?.id && editorRef.current) {
         setCursors((prev) => {
           const newCursors = new Map(prev)
           newCursors.set(data.userId, {
             position: data.cursor,
             user: data.user,
           })
+
+          // Update cursor decorations
+          updateCursorDecorations(newCursors)
+
           return newCursors
         })
       }
@@ -105,6 +110,106 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
       }
     }
   }, [socket, user])
+
+  // Function to update cursor decorations in Monaco Editor
+  const updateCursorDecorations = (cursorsMap: Map<string, { position: any; user: any }>) => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    // Clear old decorations
+    decorationsRef.current.forEach((decorationIds, userId) => {
+      editor.deltaDecorations(decorationIds, [])
+    })
+    decorationsRef.current.clear()
+
+    // Add new decorations for each remote cursor
+    cursorsMap.forEach((cursorData, userId) => {
+      const { position, user: remoteUser } = cursorData
+      if (!position || !remoteUser) return
+
+      const userName = remoteUser.firstName || remoteUser.email || 'User'
+      const userColor = getUserColor(userId)
+
+      // Create cursor line decoration with label
+      const decorations = editor.deltaDecorations([], [
+        {
+          range: {
+            startLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column + 1, // Make it 1 character wide for visibility
+          },
+          options: {
+            className: `remote-cursor-${userId.replace(/[^a-zA-Z0-9]/g, '')}`,
+            afterContentClassName: `remote-cursor-label-${userId.replace(/[^a-zA-Z0-9]/g, '')}`,
+            stickiness: 1,
+          },
+        },
+      ])
+
+      decorationsRef.current.set(userId, decorations)
+
+      // Inject custom CSS for this cursor
+      injectCursorStyles(userId, userColor, userName)
+    })
+  }
+
+  // Generate consistent color for each user
+  const getUserColor = (userId: string) => {
+    const colors = [
+      '#3b82f6', // blue
+      '#ef4444', // red
+      '#10b981', // green
+      '#f59e0b', // amber
+      '#8b5cf6', // purple
+      '#ec4899', // pink
+      '#14b8a6', // teal
+    ]
+
+    // Simple hash function to get consistent color for user
+    let hash = 0
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
+  }
+
+  // Inject CSS styles for cursor decorations
+  const injectCursorStyles = (userId: string, color: string, userName: string) => {
+    const styleId = `cursor-style-${userId}`
+    const safeUserId = userId.replace(/[^a-zA-Z0-9]/g, '')
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement
+
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = styleId
+      document.head.appendChild(styleEl)
+    }
+
+    styleEl.textContent = `
+      .remote-cursor-${safeUserId} {
+        background-color: ${color}33 !important;
+        border-left: 2px solid ${color} !important;
+        position: relative;
+      }
+      .remote-cursor-label-${safeUserId}::after {
+        content: "${userName}";
+        position: absolute;
+        top: -22px;
+        left: 0;
+        background: ${color};
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        z-index: 10000;
+        pointer-events: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+    `
+  }
 
   // Handle socket connection changes
   useEffect(() => {
@@ -165,6 +270,28 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
 
   const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
     editorRef.current = editor
+
+    // Track cursor position changes
+    editor.onDidChangeCursorPosition((e) => {
+      if (socket && user?.id && !isRemoteUpdateRef.current) {
+        const position = editor.getPosition()
+        if (position) {
+          socket.emit('code:cursor', {
+            interviewId,
+            cursor: {
+              lineNumber: position.lineNumber,
+              column: position.column,
+            },
+            userId: user.id,
+            user: {
+              id: user.id,
+              firstName: user.firstName,
+              email: user.email,
+            },
+          })
+        }
+      }
+    })
 
     // Listen for local changes with debouncing
     editor.onDidChangeModelContent(() => {
@@ -266,4 +393,3 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
     </div>
   )
 }
-

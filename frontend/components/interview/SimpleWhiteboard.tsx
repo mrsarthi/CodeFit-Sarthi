@@ -41,6 +41,9 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
   const [objects, setObjects] = useState<WhiteboardObject[]>([])
   const [tool, setTool] = useState<'pen' | 'shape'>('pen')
   const lastPointRef = useRef<{ x: number; y: number } | null>(null)
+  const [remoteCursors, setRemoteCursors] = useState<Map<string, { x: number; y: number; user: any; isDrawing: boolean; lastUpdate: number }>>(new Map())
+  const animationFrameRef = useRef<number | null>(null)
+  const cursorTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   const resizeCanvas = () => {
     const canvas = canvasRef.current
@@ -81,8 +84,56 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Redraw all objects on top of existing drawing
+    // Don't clear - freehand drawings are on canvas
+    // Just redraw shapes on top
     objects.forEach(obj => drawObject(ctx, obj))
+  }
+
+  const drawRemoteCursors = (ctx: CanvasRenderingContext2D) => {
+    remoteCursors.forEach((cursorData, userId) => {
+      const { x, y, user: remoteUser, isDrawing } = cursorData
+      if (!remoteUser || !isDrawing) return // Only show cursor if actively drawing
+
+      const userName = remoteUser.firstName || remoteUser.email || 'User'
+      const userColor = getUserColor(userId)
+
+      // Draw cursor circle
+      ctx.save()
+      ctx.fillStyle = userColor
+      ctx.strokeStyle = 'white'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(x, y, 8, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw user name label
+      ctx.font = '12px Inter, sans-serif'
+      ctx.fillStyle = userColor
+      const textWidth = ctx.measureText(userName).width
+
+      // Background for label
+      ctx.fillStyle = userColor
+      ctx.fillRect(x + 12, y - 18, textWidth + 12, 20)
+
+      // Text
+      ctx.fillStyle = 'white'
+      ctx.fillText(userName, x + 18, y - 4)
+
+      ctx.restore()
+    })
+  }
+
+  const getUserColor = (userId: string) => {
+    const colors = [
+      '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
+      '#8b5cf6', '#ec4899', '#14b8a6'
+    ]
+    let hash = 0
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
   }
 
   const drawObject = (ctx: CanvasRenderingContext2D, obj: WhiteboardObject) => {
@@ -336,11 +387,41 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
     }
 
     lastPointRef.current = coords
+
+    // Emit cursor position ONLY while drawing
+    if (socket && user?.id) {
+      socket.emit('whiteboard:cursor', {
+        interviewId,
+        cursor: { x: coords.x, y: coords.y },
+        userId: user.id,
+        isDrawing: true,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          email: user.email,
+        },
+      })
+    }
   }
 
   const handleMouseUp = () => {
     setIsDrawing(false)
     lastPointRef.current = null
+
+    // Emit cursor stop drawing
+    if (socket && user?.id) {
+      socket.emit('whiteboard:cursor', {
+        interviewId,
+        cursor: { x: 0, y: 0 },
+        userId: user.id,
+        isDrawing: false,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          email: user.email,
+        },
+      })
+    }
   }
 
   const clearCanvas = () => {
@@ -365,7 +446,7 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
 
   useEffect(() => {
     redrawShapes()
-  }, [objects])
+  }, [objects, remoteCursors])
 
   useEffect(() => {
     if (!socket || !user) return
@@ -420,10 +501,27 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
       setObjects([])
     })
 
+    socket.on('whiteboard:cursor', (data: any) => {
+      if (data.userId !== user?.id) {
+        setRemoteCursors(prev => {
+          const newCursors = new Map(prev)
+          newCursors.set(data.userId, {
+            x: data.cursor.x,
+            y: data.cursor.y,
+            user: data.user,
+            isDrawing: data.isDrawing || false,
+            lastUpdate: Date.now(),
+          })
+          return newCursors
+        })
+      }
+    })
+
     return () => {
       socket.off('whiteboard:draw')
       socket.off('whiteboard:shape-add')
       socket.off('whiteboard:clear')
+      socket.off('whiteboard:cursor')
     }
   }, [socket, user?.id])
 
@@ -438,8 +536,8 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
           <button
             onClick={() => setTool('pen')}
             className={`w-full flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${tool === 'pen'
-                ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
-                : 'bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:bg-slate-700/50'
+              ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+              : 'bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:bg-slate-700/50'
               }`}
           >
             <Pencil className="w-4 h-4" />
@@ -505,7 +603,7 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
       </div>
 
       {/* Canvas Area */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 relative">
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
@@ -516,6 +614,39 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
           onDrop={handleDrop}
           className="w-full h-full bg-white rounded-lg shadow-2xl cursor-crosshair"
         />
+
+        {/* Remote Cursor Overlays */}
+        {Array.from(remoteCursors.entries()).map(([userId, cursorData]) => {
+          if (!cursorData.isDrawing) return null
+
+          const userName = cursorData.user?.firstName || cursorData.user?.email || 'User'
+          const userColor = getUserColor(userId)
+
+          return (
+            <div
+              key={userId}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${cursorData.x}px`,
+                top: `${cursorData.y}px`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              {/* Cursor Circle */}
+              <div
+                className="w-4 h-4 rounded-full border-2 border-white"
+                style={{ backgroundColor: userColor }}
+              />
+              {/* User Name Label */}
+              <div
+                className="absolute left-4 -top-2 px-2 py-1 rounded text-white text-xs font-medium whitespace-nowrap shadow-lg"
+                style={{ backgroundColor: userColor }}
+              >
+                {userName}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

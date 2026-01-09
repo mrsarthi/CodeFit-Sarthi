@@ -509,6 +509,19 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     console.log('Backend: Broadcasted whiteboard:clear to all in room:', data.interviewId);
   }
 
+  @SubscribeMessage('whiteboard:cursor')
+  async handleWhiteboardCursor(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { interviewId: string; cursor: any; userId: string; user: any },
+  ) {
+    // Broadcast cursor position to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('whiteboard:cursor', {
+      cursor: data.cursor,
+      userId: client.userId,
+      user: data.user,
+    });
+  }
+
   // Test event for debugging
   @SubscribeMessage('test:message')
   async handleTestMessage(
