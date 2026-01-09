@@ -13,10 +13,10 @@ interface CodeEditorProps {
 export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
   const user = useAuthStore((state) => state.user)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const isRemoteUpdateRef = useRef(false) // Use ref instead of state for synchronous flag
   const [code, setCode] = useState('// Start coding here...\n')
   const [language, setLanguage] = useState('javascript')
-  const [cursors, setCursors] = useState<Map<string, any>>(new Map())
-  const [isRemoteUpdate, setIsRemoteUpdate] = useState(false)
+  const [cursors, setCursors] = useState<Map<string, { position: any; user: any }>>(new Map())
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -40,14 +40,29 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
         // Apply changes from remote user
         const changes = data.changes
         if (editorRef.current && changes && changes.length > 0) {
-          setIsRemoteUpdate(true)
+          // CRITICAL: Set flag BEFORE setValue to prevent triggering onChange
+          isRemoteUpdateRef.current = true
+
           const model = editorRef.current.getModel()
           if (model) {
+            // Save current cursor position and selection
+            const position = editorRef.current.getPosition()
+            const selection = editorRef.current.getSelection()
+
             // Set the full content from remote changes
             model.setValue(changes[0].text || '')
+
+            // Restore cursor position and selection
+            if (position) {
+              editorRef.current.setPosition(position)
+            }
+            if (selection) {
+              editorRef.current.setSelection(selection)
+            }
           }
+
           // Reset the flag after a short delay
-          setTimeout(() => setIsRemoteUpdate(false), 100)
+          setTimeout(() => { isRemoteUpdateRef.current = false }, 100)
         }
       } else {
         console.log('CodeEditor: Ignoring code change - same user or invalid ID. data.userId:', data.userId, 'user?.id:', user?.id)
@@ -69,9 +84,21 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
       }
     })
 
+    // Listen for initial state
+    socket.on('interview:init-state', (data: any) => {
+      console.log('CodeEditor: Received init state:', data)
+      if (data.code) {
+        setCode(data.code)
+        if (editorRef.current) {
+          editorRef.current.setValue(data.code)
+        }
+      }
+    })
+
     return () => {
       socket.off('code:change')
       socket.off('code:cursor')
+      socket.off('interview:init-state')
       // Clear any pending timeout
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current)
@@ -98,14 +125,14 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
           // Apply changes from remote user
           const changes = data.changes
           if (editorRef.current && changes && changes.length > 0) {
-            setIsRemoteUpdate(true)
+            isRemoteUpdateRef.current = true
             const model = editorRef.current.getModel()
             if (model) {
               // Set the full content from remote changes
               model.setValue(changes[0].text || '')
             }
             // Reset the flag after a short delay
-            setTimeout(() => setIsRemoteUpdate(false), 100)
+            setTimeout(() => { isRemoteUpdateRef.current = false }, 100)
           }
         } else {
           console.log('CodeEditor: Ignoring code change - same user or invalid ID. data.userId:', data.userId, 'user?.id:', user?.id)
@@ -142,7 +169,7 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
     // Listen for local changes with debouncing
     editor.onDidChangeModelContent(() => {
       // Don't emit if this is a remote update
-      if (isRemoteUpdate) return
+      if (isRemoteUpdateRef.current) return
 
       const model = editor.getModel()
       if (model) {

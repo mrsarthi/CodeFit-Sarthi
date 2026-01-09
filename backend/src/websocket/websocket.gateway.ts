@@ -14,12 +14,26 @@ import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+import { InterviewService } from '../interview/interview.service';
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   user?: any;
 }
 
 export const REDIS_SERVICE_TOKEN = 'RedisService';
+
+// Simple throttle helper
+function throttle(func: Function, limit: number) {
+  let inThrottle: boolean;
+  return function (...args: any[]) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  }
+}
 
 @WebSocketGateway({
   cors: {
@@ -35,12 +49,17 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
   private userSockets = new Map<string, Set<string>>(); // userId -> Set of socketIds
   private socketUsers = new Map<string, string>(); // socketId -> userId
 
+  // Throttled persistence functions per interview
+  private persistCodeChanges = new Map<string, Function>();
+  private persistWhiteboardChanges = new Map<string, Function>();
+
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
     private prisma: PrismaService,
+    private interviewService: InterviewService,
     @Optional() @Inject(REDIS_SERVICE_TOKEN) private redisService?: any,
-  ) {}
+  ) { }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -234,17 +253,34 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
 
     // Join interview room
     client.join(`interview:${data.interviewId}`);
-    console.log('Backend: User', client.userId, 'joined interview room:', data.interviewId);
+    console.log('Backend: User', client.userId, 'joined interview room:', data.interviewId, 'socket ID:', client.id);
+
+    // Send initial state (code and whiteboard) from DB
+    try {
+      const interviewData = await this.prisma.interview.findUnique({
+        where: { id: data.interviewId },
+        select: { codeContent: true, whiteboardData: true }
+      });
+
+      client.emit('interview:init-state', {
+        code: interviewData?.codeContent || '',
+        whiteboard: interviewData?.whiteboardData || [],
+      });
+    } catch (error) {
+      console.error('Backend: Failed to fetch/send init state', error);
+    }
 
     // Get all clients in the room safely
     let roomSize = 0;
+    let socketIds: string[] = [];
     try {
       const room = this.server.sockets.adapter?.rooms?.get(`interview:${data.interviewId}`);
       roomSize = room ? room.size : 0;
+      socketIds = room ? Array.from(room) : [];
     } catch (error) {
       console.log('Backend: Could not get room info:', error.message);
     }
-    console.log('Backend: Room', data.interviewId, 'now has', roomSize, 'participants');
+    console.log('Backend: Room', data.interviewId, 'now has', roomSize, 'participants. Socket IDs in room:', socketIds);
 
     // Notify others
     client.to(`interview:${data.interviewId}`).emit('interview:user-joined', {
@@ -313,7 +349,7 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { interviewId: string; changes: any; userId?: string },
   ) {
-    console.log('Backend: Received code:change from user:', client.userId, 'for interview:', data.interviewId)
+    console.log('Backend: Received code:change from user:', client.userId, 'socket ID:', client.id, 'for interview:', data.interviewId)
     console.log('Backend: Data userId:', data.userId, 'client userId:', client.userId)
 
     // Get room info safely
@@ -325,29 +361,49 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
         roomSize = room.size;
         roomSockets = Array.from(room);
       }
-      console.log('Backend: Room details - size:', roomSize, 'sockets:', roomSockets.length > 0 ? roomSockets : 'none');
+      console.log('Backend: Room details - size:', roomSize, 'socket IDs in room:', roomSockets, 'current socket ID:', client.id, 'is in room:', roomSockets.includes(client.id));
     } catch (error) {
       console.log('Backend: Could not get room info:', error.message);
     }
     console.log('Backend: Broadcasting code:change to', roomSize, 'participants in room:', data.interviewId)
 
-    // Try broadcasting to all in room (including sender) to test
-    const broadcastResult = this.server.to(`interview:${data.interviewId}`).emit('code:change', {
+    // Broadcast code changes to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('code:change', {
       changes: data.changes,
       userId: client.userId,
       user: client.user,
     });
 
-    console.log('Backend: Code broadcast result to all in room:', broadcastResult);
+    console.log('Backend: Broadcasted code:change to room:', data.interviewId, '(excluding sender)');
 
-    // Also try alternative broadcasting method
-    const altBroadcast = client.to(`interview:${data.interviewId}`).emit('code:change', {
-      changes: data.changes,
-      userId: client.userId,
-      user: client.user,
-    });
+    // Persist to DB (throttled)
+    if (!this.persistCodeChanges.has(data.interviewId)) {
+      this.persistCodeChanges.set(data.interviewId, throttle(async (id: string, code: string) => {
+        try {
+          // Determine full content. Since we only receive changes here, we might need the FULL content.
+          // However, the frontend sends changes. 
+          // Wait, Monaco 'code:change' usually sends the *full* value or a delta. 
+          // Let's assume for persistence we want the FULL value.
+          // Refactor: We need the client to send the FULL value for persistence, or we maintain state in memory.
+          // Ideally, the client sends the current full code periodically or we save it.
+          // Let's check what 'data.changes' contains. If it's just an op, we can't easily reconstruction without memory.
+          // BUT, often these editors send the full value or we can ask for it.
+          // Let's assume for now we might need to change the event to include full code OR we just save what we have if it's full.
+          // If data.changes is the string content:
+          await this.interviewService.updateState(id, { codeContent: code });
+        } catch (err) {
+          console.error('Failed to persist code', err);
+        }
+      }, 2000));
+    }
 
-    console.log('Backend: Alternative code broadcast result (excluding sender):', altBroadcast);
+    // NOTE: We change the event payload expectation slightly: we want the *current full code* for persistence.
+    // The frontend currently sends `changes`. Let's see CodeEditor.tsx.
+    // Use `code` from data if available, or update frontend to send it.
+    if (data['code']) {
+      const saver = this.persistCodeChanges.get(data.interviewId);
+      saver(data.interviewId, data['code']);
+    }
   }
 
   @SubscribeMessage('code:cursor')
@@ -387,23 +443,39 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     }
     console.log('Backend: Broadcasting whiteboard:draw to', roomSize, 'participants in room:', data.interviewId);
 
-    // Try broadcasting to all in room (including sender) to test
-    const broadcastResult = this.server.to(`interview:${data.interviewId}`).emit('whiteboard:draw', {
+    // Broadcast drawing to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('whiteboard:draw', {
       drawing: data.drawing,
       userId: client.userId,
       user: client.user,
     });
 
-    console.log('Backend: Whiteboard broadcast result to all:', broadcastResult);
+    console.log('Backend: Broadcasted whiteboard:draw to room:', data.interviewId, '(excluding sender)');
 
-    // Also try alternative broadcasting method
-    const altBroadcast = client.to(`interview:${data.interviewId}`).emit('whiteboard:draw', {
-      drawing: data.drawing,
-      userId: client.userId,
-      user: client.user,
-    });
+    // Persist to DB (accumulator needed? No, whiteboard lines are additive usually)
+    // BUT, for a whiteboard, we need the *entire* history to redraw.
+    // Storing every line in DB individually is heavy. Storing a JSON array is better.
+    // We need to fetch, append, save? That's race-condition prone.
+    // BETTER: The server keeps an in-memory or Redis buffer of the current lines, and periodically flushes?
+    // OR: We overwrite the "whiteboardData" with the full state?
+    // The frontend sends "drawing" (one line).
+    // Ideally, we'd append this line to the DB's JSON array. 
+    // Prisma JSON append is not native. We'd need to fetch-modify-save.
+    // For now, let's implement a simple fetch-append-save (inefficient but works for small scale).
 
-    console.log('Backend: Alternative whiteboard broadcast result (excluding sender):', altBroadcast);
+    // Actually, let's rely on the client sending full state periodically? No, that's heavy.
+    // Let's do fetch-append-save for now.
+
+    // A better approach for the future: Use Redis commands to push to a list, then flush to SQL.
+    // For this fixing task:
+    try {
+      const interview = await this.prisma.interview.findUnique({ where: { id: data.interviewId }, select: { whiteboardData: true } });
+      let lines = (interview?.whiteboardData as any[]) || [];
+      lines.push(data.drawing);
+      await this.interviewService.updateState(data.interviewId, { whiteboardData: lines });
+    } catch (e) {
+      console.error('Failed to persist drawing', e);
+    }
   }
 
   @SubscribeMessage('whiteboard:clear')

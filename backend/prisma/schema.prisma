@@ -69,6 +69,8 @@ model Interview {
   id          String          @id @default(uuid())
   title       String
   description String?
+  codeContent String?   @db.Text
+  whiteboardData Json?
   status      InterviewStatus @default(SCHEDULED)
   scheduledAt DateTime?
   startedAt   DateTime?

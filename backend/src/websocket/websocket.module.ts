@@ -6,11 +6,13 @@ import { RedisModule } from '../redis/redis.module';
 import { RedisService } from '../redis/redis.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { InterviewModule } from '../interview/interview.module';
 
 @Module({
   imports: [
     PrismaModule,
     RedisModule,
+    InterviewModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -36,5 +38,5 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   ],
   exports: [AppWebSocketGateway],
 })
-export class WebSocketModule {}
+export class WebSocketModule { }
 

@@ -12,16 +12,24 @@ export const getSocket = (token: string): Socket => {
 
   // Check if we already have a socket for this token
   const existingSocket = socketMap.get(token);
-  if (existingSocket?.connected) {
-    console.log('Socket: Returning existing connected socket for token:', token.substring(0, 10) + '...');
-    return existingSocket;
-  }
+  if (existingSocket) {
+    // If connected, return it
+    if (existingSocket.connected) {
+      console.log('Socket: Returning existing connected socket for token:', token.substring(0, 10) + '...');
+      return existingSocket;
+    }
 
-  // Disconnect existing socket if it's not connected
-  if (existingSocket && !existingSocket.connected) {
-    console.log('Socket: Disconnecting stale socket for token:', token.substring(0, 10) + '...');
-    existingSocket.disconnect();
-    socketMap.delete(token);
+    // If explicitly disconnected, clean it up
+    if (existingSocket.disconnected) {
+      console.log('Socket: Found disconnected socket, cleaning up and creating new one:', token.substring(0, 10) + '...');
+      existingSocket.removeAllListeners(); // Clean up listeners
+      socketMap.delete(token);
+    } else {
+      // Socket exists but is not connected yet (likely connecting)
+      // Return it to avoid creating duplicates
+      console.log('Socket: Returning existing socket (connecting) for token:', token.substring(0, 10) + '...');
+      return existingSocket;
+    }
   }
 
   console.log('Socket: Creating new socket connection for token:', token.substring(0, 10) + '...');
@@ -30,7 +38,7 @@ export const getSocket = (token: string): Socket => {
       token,
     },
     transports: ['websocket'],
-    forceNew: true, // Force new connection
+    // Remove forceNew to allow socket.io to reuse connections properly
   });
 
   // Store the socket

@@ -5,7 +5,7 @@ import { InterviewStatus } from '@prisma/client';
 
 @Injectable()
 export class InterviewService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(userId: string, createInterviewDto: CreateInterviewDto) {
     const { title, description, scheduledAt, participantIds } = createInterviewDto;
@@ -219,6 +219,12 @@ export class InterviewService {
     });
 
     return updated;
+  }
+  async updateState(id: string, data: { codeContent?: string; whiteboardData?: any }) {
+    return this.prisma.interview.update({
+      where: { id },
+      data,
+    });
   }
 }
 

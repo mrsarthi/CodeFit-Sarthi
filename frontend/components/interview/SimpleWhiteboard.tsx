@@ -31,8 +31,25 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
       // Only resize if dimensions actually changed
       if (canvas.width !== newWidth || canvas.height !== newHeight) {
         console.log('Whiteboard: Resizing canvas from', canvas.width, 'x', canvas.height, 'to', newWidth, 'x', newHeight)
+
+        // Save existing canvas content
+        const ctx = canvas.getContext('2d')
+        let imageData: ImageData | null = null
+        if (ctx) {
+          try {
+            imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          } catch (e) {
+            console.warn('Whiteboard: Could not save canvas content:', e)
+          }
+        }
+
         canvas.width = newWidth
         canvas.height = newHeight
+
+        // Restore canvas content
+        if (ctx && imageData) {
+          ctx.putImageData(imageData, 0, 0)
+        }
       }
     }
   }
@@ -159,6 +176,8 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
             console.log('Whiteboard: Drawing remote stroke from user:', data.userId)
             const remoteCtx = canvas.getContext('2d')
             if (remoteCtx) {
+              remoteCtx.save() // Save current state (color, etc.)
+
               // Set remote drawing properties
               remoteCtx.strokeStyle = data.drawing.color
               remoteCtx.lineWidth = data.drawing.brushSize
@@ -170,6 +189,8 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
               remoteCtx.moveTo(data.drawing.fromX, data.drawing.fromY)
               remoteCtx.lineTo(data.drawing.toX, data.drawing.toY)
               remoteCtx.stroke()
+
+              remoteCtx.restore() // Restore previous state
             }
           } else {
             console.log('Whiteboard: Ignoring own drawing from user:', data.userId)
@@ -185,6 +206,27 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
             ctx.clearRect(0, 0, canvas.width, canvas.height)
           } else {
             console.log('Whiteboard: Ignoring clear event from self or invalid user')
+          }
+        })
+
+        socket.on('interview:init-state', (data: any) => {
+          console.log('Whiteboard: Received init state', data)
+          if (data.whiteboard && Array.isArray(data.whiteboard)) {
+            const ctx = canvasRef.current?.getContext('2d')
+            if (ctx) {
+              data.whiteboard.forEach((drawing: any) => {
+                ctx.save()
+                ctx.strokeStyle = drawing.color
+                ctx.lineWidth = drawing.brushSize
+                ctx.lineCap = 'round'
+                ctx.lineJoin = 'round'
+                ctx.beginPath()
+                ctx.moveTo(drawing.fromX, drawing.fromY)
+                ctx.lineTo(drawing.toX, drawing.toY)
+                ctx.stroke()
+                ctx.restore()
+              })
+            }
           }
         })
 
@@ -210,6 +252,7 @@ export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProp
         socket.off('connect', setupSocketListeners)
         socket.off('whiteboard:draw')
         socket.off('whiteboard:clear')
+        socket.off('interview:init-state')
       }
     }
   }, [isDrawing, color, brushSize, socket, interviewId])

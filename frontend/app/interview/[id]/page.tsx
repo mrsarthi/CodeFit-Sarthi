@@ -57,10 +57,7 @@ export default function InterviewRoomPage() {
     }, 100)
 
 
-    // Enter fullscreen when interview starts (after initialization)
-    const fullscreenTimer = setTimeout(() => {
-      enterFullscreen()
-    }, 2000) // Wait for interview to initialize
+
 
 
     // Request wake lock to prevent screen from sleeping
@@ -77,33 +74,7 @@ export default function InterviewRoomPage() {
 
     requestWakeLock()
 
-    // Handle fullscreen changes (non-blocking)
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        // Non-blocking: show a small banner letting the user return to fullscreen
-        console.log('Interview: Detected exit from fullscreen; showing non-blocking warning banner')
-        setShowFullscreenWarning(true)
-      }
-    }
 
-    // Handle keyboard shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && document.fullscreenElement) {
-        e.preventDefault()
-        // Non-blocking: show banner asking user to confirm exit
-        setShowFullscreenWarning(true)
-      } else if (e.key === 'F11') {
-        e.preventDefault()
-        if (document.fullscreenElement) {
-          exitFullscreen()
-        } else {
-          enterFullscreen()
-        }
-      }
-    }
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    document.addEventListener('keydown', handleKeyDown)
 
     // Handle beforeunload to prevent accidental navigation
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -116,9 +87,7 @@ export default function InterviewRoomPage() {
 
     return () => {
       clearTimeout(timer)
-      clearTimeout(fullscreenTimer)
-      document.removeEventListener('fullscreenchange', handleFullscreenChange)
-      document.removeEventListener('keydown', handleKeyDown)
+
       window.removeEventListener('beforeunload', handleBeforeUnload)
       if (wakeLock) {
         wakeLock.release()
@@ -152,9 +121,12 @@ export default function InterviewRoomPage() {
         console.log('Interview: Updated socketRef.current, setting isSocketConnected to true')
         setIsSocketConnected(true)
 
-        // Join interview room after socket connects
-        console.log('Interview: Joining interview room after socket connect:', interviewId, 'for user:', user?.id, 'role:', user?.role)
-        socket.emit('interview:join', { interviewId })
+        // IMPORTANT: Wait a bit for authentication to complete before joining
+        // This prevents the race condition where join happens before userId is set
+        setTimeout(() => {
+          console.log('Interview: Joining interview room after socket connect:', interviewId, 'for user:', user?.id, 'role:', user?.role)
+          socket.emit('interview:join', { interviewId })
+        }, 100)
       })
 
       socket.on('disconnect', (reason) => {
@@ -497,15 +469,7 @@ export default function InterviewRoomPage() {
                   </div>
                 )}
 
-                {showFullscreenWarning && (
-                  <div className="ml-4 p-2 bg-yellow-600/10 border border-yellow-600/20 rounded-md flex items-center gap-3">
-                    <div className="text-sm text-yellow-300">You have exited fullscreen. For best experience, return to fullscreen.</div>
-                    <div className="ml-2 flex items-center gap-2">
-                      <button onClick={() => { setShowFullscreenWarning(false); enterFullscreen(); }} className="px-3 py-1 bg-yellow-600 text-sm text-black rounded">Return</button>
-                      <button onClick={() => setShowFullscreenWarning(false)} className="px-3 py-1 bg-transparent text-sm text-yellow-300 border border-yellow-600/20 rounded">Dismiss</button>
-                    </div>
-                  </div>
-                )}
+
               </div>
               <Button
                 variant="outline"
@@ -663,11 +627,10 @@ export default function InterviewRoomPage() {
                   variant={isVideoOn ? 'default' : 'outline'}
                   size="sm"
                   onClick={toggleVideo}
-                  className={`rounded-lg px-4 py-3 transition-all duration-200 ${
-                    isVideoOn
-                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
-                      : 'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500/70'
-                  }`}
+                  className={`rounded-lg px-4 py-3 transition-all duration-200 ${isVideoOn
+                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
+                    : 'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500/70'
+                    }`}
                 >
                   {isVideoOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
                 </Button>
@@ -675,11 +638,10 @@ export default function InterviewRoomPage() {
                   variant={isAudioOn ? 'default' : 'outline'}
                   size="sm"
                   onClick={toggleAudio}
-                  className={`rounded-lg px-4 py-3 transition-all duration-200 ${
-                    isAudioOn
-                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
-                      : 'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500/70'
-                  }`}
+                  className={`rounded-lg px-4 py-3 transition-all duration-200 ${isAudioOn
+                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
+                    : 'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500/70'
+                    }`}
                 >
                   {isAudioOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
                 </Button>
@@ -695,11 +657,10 @@ export default function InterviewRoomPage() {
             <div className="flex px-4">
               <button
                 onClick={() => setActiveTab('code')}
-                className={`px-6 py-4 font-medium text-sm border-b-2 transition-all duration-300 flex items-center space-x-2 group relative overflow-hidden ${
-                  activeTab === 'code'
-                    ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5 shadow-lg shadow-emerald-500/10'
-                    : 'border-transparent text-slate-400 hover:text-slate-300 hover:bg-slate-800/30 hover:scale-105'
-                }`}
+                className={`px-6 py-4 font-medium text-sm border-b-2 transition-all duration-300 flex items-center space-x-2 group relative overflow-hidden ${activeTab === 'code'
+                  ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5 shadow-lg shadow-emerald-500/10'
+                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:bg-slate-800/30 hover:scale-105'
+                  }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-emerald-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
                 <Code className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'code' ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -707,11 +668,10 @@ export default function InterviewRoomPage() {
               </button>
               <button
                 onClick={() => setActiveTab('whiteboard')}
-                className={`px-6 py-4 font-medium text-sm border-b-2 transition-all duration-300 flex items-center space-x-2 group relative overflow-hidden ${
-                  activeTab === 'whiteboard'
-                    ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5 shadow-lg shadow-emerald-500/10'
-                    : 'border-transparent text-slate-400 hover:text-slate-300 hover:bg-slate-800/30 hover:scale-105'
-                }`}
+                className={`px-6 py-4 font-medium text-sm border-b-2 transition-all duration-300 flex items-center space-x-2 group relative overflow-hidden ${activeTab === 'whiteboard'
+                  ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5 shadow-lg shadow-emerald-500/10'
+                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:bg-slate-800/30 hover:scale-105'
+                  }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-emerald-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
                 <PenTool className={`w-4 h-4 transition-transform duration-200 ${activeTab === 'whiteboard' ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -732,15 +692,14 @@ export default function InterviewRoomPage() {
             )}
             <div className="absolute inset-0 animate-in fade-in-0 duration-300 h-full">
               {isSocketConnected ? (
-                activeTab === 'code' ? (
-                  <div className="animate-in slide-in-from-right-2 duration-300 h-full">
+                <>
+                  <div className={`animate-in slide-in-from-right-2 duration-300 h-full ${activeTab === 'code' ? 'block' : 'hidden'}`}>
                     <CodeEditor interviewId={interviewId} socket={socketRef?.current || null} />
                   </div>
-                ) : (
-                  <div className="animate-in slide-in-from-left-2 duration-300 h-full">
+                  <div className={`animate-in slide-in-from-left-2 duration-300 h-full ${activeTab === 'whiteboard' ? 'block' : 'hidden'}`}>
                     <Whiteboard interviewId={interviewId} socket={socketRef?.current || null} />
                   </div>
-                )
+                </>
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
