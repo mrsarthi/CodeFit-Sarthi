@@ -465,7 +465,6 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
 
     // Actually, let's rely on the client sending full state periodically? No, that's heavy.
     // Let's do fetch-append-save for now.
-
     // A better approach for the future: Use Redis commands to push to a list, then flush to SQL.
     // For this fixing task:
     try {
@@ -476,6 +475,22 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     } catch (e) {
       console.error('Failed to persist drawing', e);
     }
+  }
+
+  @SubscribeMessage('whiteboard:shape-add')
+  async handleWhiteboardShapeAdd(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { interviewId: string; object: any; userId: string },
+  ) {
+    console.log('Backend: Received whiteboard:shape-add from user:', data.userId, 'for interview:', data.interviewId);
+
+    // Broadcast shape to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('whiteboard:shape-add', {
+      object: data.object,
+      userId: client.userId,
+    });
+
+    console.log('Backend: Broadcasted whiteboard:shape-add to room:', data.interviewId);
   }
 
   @SubscribeMessage('whiteboard:clear')

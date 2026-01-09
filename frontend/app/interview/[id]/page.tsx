@@ -474,46 +474,6 @@ export default function InterviewRoomPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  console.log('=== CONNECTION DEBUG ===')
-                  console.log('User:', { id: user?.id, role: user?.role, name: user?.firstName })
-                  console.log('Socket:', {
-                    exists: !!socketRef.current,
-                    connected: socketRef.current?.connected,
-                    id: socketRef.current?.id
-                  })
-                  console.log('States:', { isSocketConnected, isJoinedRoom })
-                  console.log('Interview ID:', interviewId)
-
-                  if (socketRef.current) {
-                    console.log('Interview: Sending test message')
-                    socketRef.current.emit('test:message', {
-                      message: `Test from ${user?.firstName} (${user?.role}) at ${new Date().toLocaleTimeString()}`,
-                      interviewId
-                    })
-                  }
-                }}
-                className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/70 hover:text-purple-300 rounded-lg px-4 py-2 backdrop-blur-sm transition-all duration-200 mr-2"
-              >
-                Debug
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (socketRef.current) {
-                    console.log('Interview: Sending test message')
-                    socketRef.current.emit('test:message', {
-                      message: `Test from ${user?.firstName} at ${new Date().toLocaleTimeString()}`,
-                      interviewId
-                    })
-                  }
-                }}
-                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/70 hover:text-blue-300 rounded-lg px-4 py-2 backdrop-blur-sm transition-all duration-200 mr-2"
-              >
-                Test Socket
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
                   const confirmed = window.confirm(
                     'Are you sure you want to end this interview? This action cannot be undone and will disconnect all participants.'
                   )

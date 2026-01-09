@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Square, Circle, ArrowRight, ArrowLeftRight, Database, Cloud, Server, Box, Pencil } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 
 interface WhiteboardProps {
@@ -10,387 +10,512 @@ interface WhiteboardProps {
   socket: any
 }
 
+interface WhiteboardObject {
+  id: string
+  type: 'square' | 'rectangle' | 'circle' | 'arrow' | 'double-arrow' | 'database' | 'cloud' | 'server' | 'container'
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string
+}
+
+const SHAPE_PALETTE = [
+  { type: 'square' as const, icon: Square, label: 'Square', defaultSize: 80 },
+  { type: 'rectangle' as const, icon: Square, label: 'Rectangle', defaultSize: { w: 120, h: 60 } },
+  { type: 'circle' as const, icon: Circle, label: 'Circle', defaultSize: 80 },
+  { type: 'arrow' as const, icon: ArrowRight, label: 'Arrow', defaultSize: { w: 100, h: 40 } },
+  { type: 'double-arrow' as const, icon: ArrowLeftRight, label: 'Double Arrow', defaultSize: { w: 100, h: 40 } },
+  { type: 'database' as const, icon: Database, label: 'Database', defaultSize: { w: 60, h: 80 } },
+  { type: 'cloud' as const, icon: Cloud, label: 'Cloud/AWS', defaultSize: { w: 100, h: 60 } },
+  { type: 'server' as const, icon: Server, label: 'Server', defaultSize: { w: 60, h: 80 } },
+  { type: 'container' as const, icon: Box, label: 'Container', defaultSize: { w: 80, h: 80 } },
+]
+
 export default function SimpleWhiteboard({ interviewId, socket }: WhiteboardProps) {
   const user = useAuthStore((state) => state.user)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [color, setColor] = useState('#3b82f6')
   const [brushSize, setBrushSize] = useState(3)
+  const [objects, setObjects] = useState<WhiteboardObject[]>([])
+  const [tool, setTool] = useState<'pen' | 'shape'>('pen')
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null)
 
   const resizeCanvas = () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const container = canvas.parentElement?.parentElement
+    const container = canvas.parentElement
     if (container) {
       const rect = container.getBoundingClientRect()
-      const padding = 48 // Account for padding
-      const newWidth = Math.max(rect.width - padding, 800)
-      const newHeight = Math.max(rect.height - padding, 600)
+      const newWidth = Math.max(rect.width - 16, 800)
+      const newHeight = Math.max(rect.height - 16, 600)
 
-      // Only resize if dimensions actually changed
       if (canvas.width !== newWidth || canvas.height !== newHeight) {
-        console.log('Whiteboard: Resizing canvas from', canvas.width, 'x', canvas.height, 'to', newWidth, 'x', newHeight)
-
-        // Save existing canvas content
         const ctx = canvas.getContext('2d')
         let imageData: ImageData | null = null
         if (ctx) {
           try {
             imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
           } catch (e) {
-            console.warn('Whiteboard: Could not save canvas content:', e)
+            console.warn('Could not save canvas content:', e)
           }
         }
 
         canvas.width = newWidth
         canvas.height = newHeight
 
-        // Restore canvas content
         if (ctx && imageData) {
           ctx.putImageData(imageData, 0, 0)
         }
+
+        redrawShapes()
       }
     }
   }
 
-  useEffect(() => {
+  const redrawShapes = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Set canvas size to fill container
-    resizeCanvas()
+    // Redraw all objects on top of existing drawing
+    objects.forEach(obj => drawObject(ctx, obj))
+  }
 
-    // Set initial canvas properties
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.strokeStyle = color
-    ctx.lineWidth = brushSize
+  const drawObject = (ctx: CanvasRenderingContext2D, obj: WhiteboardObject) => {
+    ctx.save()
+    ctx.fillStyle = obj.color
+    ctx.strokeStyle = obj.color
+    ctx.lineWidth = 2
 
-    const onResize = () => {
-      resizeCanvas()
-      // Reapply context properties after resize
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
-      ctx.strokeStyle = color
-      ctx.lineWidth = brushSize
+    switch (obj.type) {
+      case 'square':
+      case 'rectangle':
+        ctx.fillRect(obj.x, obj.y, obj.width, obj.height)
+        ctx.strokeRect(obj.x, obj.y, obj.width, obj.height)
+        break
+
+      case 'circle':
+        ctx.beginPath()
+        ctx.arc(obj.x + obj.width / 2, obj.y + obj.height / 2, obj.width / 2, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+        break
+
+      case 'arrow':
+        drawArrow(ctx, obj.x, obj.y + obj.height / 2, obj.x + obj.width, obj.y + obj.height / 2, false)
+        break
+
+      case 'double-arrow':
+        drawArrow(ctx, obj.x, obj.y + obj.height / 2, obj.x + obj.width, obj.y + obj.height / 2, true)
+        break
+
+      case 'database':
+        drawDatabase(ctx, obj.x, obj.y, obj.width, obj.height)
+        break
+
+      case 'cloud':
+        drawCloud(ctx, obj.x, obj.y, obj.width, obj.height)
+        break
+
+      case 'server':
+        drawServer(ctx, obj.x, obj.y, obj.width, obj.height)
+        break
+
+      case 'container':
+        drawContainer(ctx, obj.x, obj.y, obj.width, obj.height)
+        break
     }
 
-    window.addEventListener('resize', onResize)
+    ctx.restore()
+  }
 
-    // Handle drawing
-    let lastX = 0
-    let lastY = 0
+  const drawArrow = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, doubleEnded: boolean) => {
+    const headLength = 15
+    const angle = Math.atan2(y2 - y1, x2 - x1)
 
-    const getCanvasCoordinates = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      const scaleX = canvas.width / rect.width
-      const scaleY = canvas.height / rect.height
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-      }
-    }
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.stroke()
 
-    const startDrawing = (e: MouseEvent) => {
-      setIsDrawing(true)
-      const coords = getCanvasCoordinates(e)
-      lastX = coords.x
-      lastY = coords.y
+    ctx.beginPath()
+    ctx.moveTo(x2, y2)
+    ctx.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 6), y2 - headLength * Math.sin(angle - Math.PI / 6))
+    ctx.moveTo(x2, y2)
+    ctx.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 6), y2 - headLength * Math.sin(angle + Math.PI / 6))
+    ctx.stroke()
+
+    if (doubleEnded) {
       ctx.beginPath()
-      ctx.moveTo(lastX, lastY)
-    }
-
-    const draw = (e: MouseEvent) => {
-      if (!isDrawing) return
-
-      const coords = getCanvasCoordinates(e)
-      const currentX = coords.x
-      const currentY = coords.y
-
-      // Draw locally
-      ctx.lineTo(currentX, currentY)
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x1 + headLength * Math.cos(angle - Math.PI / 6), y1 + headLength * Math.sin(angle - Math.PI / 6))
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x1 + headLength * Math.cos(angle + Math.PI / 6), y1 + headLength * Math.sin(angle + Math.PI / 6))
       ctx.stroke()
+    }
+  }
 
-      // Broadcast drawing to other participants
-      if (socket && user?.id) {
-        if (socket.connected) {
-          console.log('Whiteboard: Emitting draw event for user:', user.id, 'socket id:', socket.id)
-          const eventData = {
-            interviewId,
-            drawing: {
-              fromX: lastX,
-              fromY: lastY,
-              toX: currentX,
-              toY: currentY,
-              color,
-              brushSize,
-            },
-            userId: user.id,
-          }
-          console.log('Whiteboard: Event data:', eventData)
-          socket.emit('whiteboard:draw', eventData)
-          console.log('Whiteboard: Draw event emitted successfully')
-        } else {
-          console.log('Whiteboard: Cannot emit - socket not connected, socket id:', socket.id)
-        }
-      } else {
-        console.log('Whiteboard: Cannot emit - missing socket or user', {
-          socket: !!socket,
-          socketConnected: socket?.connected,
-          socketId: socket?.id,
-          userId: user?.id,
-        })
-      }
+  const drawDatabase = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    const ellipseHeight = h * 0.15
 
-      lastX = currentX
-      lastY = currentY
+    ctx.beginPath()
+    ctx.ellipse(x + w / 2, y + ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.fillRect(x, y + ellipseHeight, w, h - ellipseHeight * 2)
+    ctx.beginPath()
+    ctx.moveTo(x, y + ellipseHeight)
+    ctx.lineTo(x, y + h - ellipseHeight)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x + w, y + ellipseHeight)
+    ctx.lineTo(x + w, y + h - ellipseHeight)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.ellipse(x + w / 2, y + h - ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+
+  const drawCloud = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    ctx.beginPath()
+    ctx.arc(x + w * 0.25, y + h * 0.6, h * 0.3, 0, Math.PI * 2)
+    ctx.arc(x + w * 0.5, y + h * 0.4, h * 0.4, 0, Math.PI * 2)
+    ctx.arc(x + w * 0.75, y + h * 0.6, h * 0.3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+
+  const drawServer = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    const layers = 3
+    const layerHeight = h / layers
+    const currentFillStyle = ctx.fillStyle
+
+    for (let i = 0; i < layers; i++) {
+      const layerY = y + i * layerHeight
+      ctx.fillRect(x, layerY, w, layerHeight - 4)
+      ctx.strokeRect(x, layerY, w, layerHeight - 4)
+
+      ctx.fillStyle = '#00ff00'
+      ctx.fillRect(x + w - 15, layerY + 5, 8, 8)
+      ctx.fillStyle = currentFillStyle
+    }
+  }
+
+  const drawContainer = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    ctx.strokeRect(x, y, w, h)
+
+    ctx.beginPath()
+    ctx.moveTo(x, y + h * 0.3)
+    ctx.lineTo(x + w, y + h * 0.3)
+    ctx.moveTo(x, y + h * 0.6)
+    ctx.lineTo(x + w, y + h * 0.6)
+    ctx.stroke()
+  }
+
+  const getCanvasCoordinates = (e: MouseEvent | React.MouseEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    }
+  }
+
+  const handleDragStart = (e: React.DragEvent, shapeType: typeof SHAPE_PALETTE[0]) => {
+    e.dataTransfer.setData('shapeType', shapeType.type)
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const shapeType = e.dataTransfer.getData('shapeType') as WhiteboardObject['type']
+    const shape = SHAPE_PALETTE.find(s => s.type === shapeType)
+    if (!shape) return
+
+    const coords = getCanvasCoordinates(e as any)
+    const size = typeof shape.defaultSize === 'number'
+      ? { w: shape.defaultSize, h: shape.defaultSize }
+      : shape.defaultSize
+
+    const newObject: WhiteboardObject = {
+      id: `${Date.now()}-${Math.random()}`,
+      type: shapeType,
+      x: coords.x - size.w / 2,
+      y: coords.y - size.h / 2,
+      width: size.w,
+      height: size.h,
+      color: color
     }
 
-    const stopDrawing = () => {
-      setIsDrawing(false)
-      ctx.beginPath() // Reset path for next drawing
-    }
+    setObjects(prev => [...prev, newObject])
 
-    // Add event listeners
-    canvas.addEventListener('mousedown', startDrawing)
-    canvas.addEventListener('mousemove', draw)
-    canvas.addEventListener('mouseup', stopDrawing)
-    canvas.addEventListener('mouseout', stopDrawing)
-
-    // Helper to (re)attach socket listeners safely
-    const setupSocketListeners = () => {
-      if (!socket) return
-      try {
-        socket.off('whiteboard:draw')
-        socket.off('whiteboard:clear')
-
-        socket.on('whiteboard:draw', (data: any) => {
-          console.log('Whiteboard: Received draw event:', data, 'current user:', user?.id)
-
-          // Only draw if it's from another user
-          if (data.userId !== user?.id) {
-            console.log('Whiteboard: Drawing remote stroke from user:', data.userId)
-            const remoteCtx = canvas.getContext('2d')
-            if (remoteCtx) {
-              remoteCtx.save() // Save current state (color, etc.)
-
-              // Set remote drawing properties
-              remoteCtx.strokeStyle = data.drawing.color
-              remoteCtx.lineWidth = data.drawing.brushSize
-              remoteCtx.lineCap = 'round'
-              remoteCtx.lineJoin = 'round'
-
-              // Draw the line segment
-              remoteCtx.beginPath()
-              remoteCtx.moveTo(data.drawing.fromX, data.drawing.fromY)
-              remoteCtx.lineTo(data.drawing.toX, data.drawing.toY)
-              remoteCtx.stroke()
-
-              remoteCtx.restore() // Restore previous state
-            }
-          } else {
-            console.log('Whiteboard: Ignoring own drawing from user:', data.userId)
-          }
-        })
-
-        socket.on('whiteboard:clear', (data: any) => {
-          console.log('Whiteboard: Received clear event:', data, 'current user:', user?.id)
-
-          // Only clear if it's from another user (not ourselves)
-          if (data.userId && data.userId !== user?.id) {
-            console.log('Whiteboard: Clearing canvas for remote clear from user:', data.userId)
-            ctx.clearRect(0, 0, canvas.width, canvas.height)
-          } else {
-            console.log('Whiteboard: Ignoring clear event from self or invalid user')
-          }
-        })
-
-        socket.on('interview:init-state', (data: any) => {
-          console.log('Whiteboard: Received init state', data)
-          if (data.whiteboard && Array.isArray(data.whiteboard)) {
-            const ctx = canvasRef.current?.getContext('2d')
-            if (ctx) {
-              data.whiteboard.forEach((drawing: any) => {
-                ctx.save()
-                ctx.strokeStyle = drawing.color
-                ctx.lineWidth = drawing.brushSize
-                ctx.lineCap = 'round'
-                ctx.lineJoin = 'round'
-                ctx.beginPath()
-                ctx.moveTo(drawing.fromX, drawing.fromY)
-                ctx.lineTo(drawing.toX, drawing.toY)
-                ctx.stroke()
-                ctx.restore()
-              })
-            }
-          }
-        })
-
-        console.log('Whiteboard: Socket listeners set up successfully')
-      } catch (err) {
-        console.warn('Whiteboard: Error setting up socket listeners', err)
-      }
-    }
-
-    // Initial attach if already connected
-    if (socket) {
-      if (socket.connected) setupSocketListeners()
-      socket.on('connect', setupSocketListeners)
-    }
-
-    return () => {
-      canvas.removeEventListener('mousedown', startDrawing)
-      canvas.removeEventListener('mousemove', draw)
-      canvas.removeEventListener('mouseup', stopDrawing)
-      canvas.removeEventListener('mouseout', stopDrawing)
-      window.removeEventListener('resize', onResize)
-      if (socket) {
-        socket.off('connect', setupSocketListeners)
-        socket.off('whiteboard:draw')
-        socket.off('whiteboard:clear')
-        socket.off('interview:init-state')
-      }
-    }
-  }, [isDrawing, color, brushSize, socket, interviewId])
-
-  const clearCanvas = () => {
-    console.log('Whiteboard: Clear button clicked by user:', user?.id)
+    // Draw immediately
     const canvas = canvasRef.current
     if (canvas) {
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        if (socket && user?.id && socket.connected) {
-          console.log('Whiteboard: Emitting clear event for user:', user.id)
-          socket.emit('whiteboard:clear', { interviewId, userId: user.id })
-        } else {
-          console.log('Whiteboard: Cannot emit clear - socket not connected or missing user')
-        }
+        drawObject(ctx, newObject)
       }
+    }
+
+    // Emit to other users
+    if (socket && user?.id) {
+      socket.emit('whiteboard:shape-add', {
+        interviewId,
+        object: newObject,
+        userId: user.id
+      })
     }
   }
 
+  // Freehand drawing handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (tool !== 'pen') return
+
+    setIsDrawing(true)
+    const coords = getCanvasCoordinates(e)
+    lastPointRef.current = coords
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.strokeStyle = color
+    ctx.lineWidth = brushSize
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(coords.x, coords.y)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || tool !== 'pen') return
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const coords = getCanvasCoordinates(e)
+    const lastPoint = lastPointRef.current || coords
+
+    ctx.lineTo(coords.x, coords.y)
+    ctx.stroke()
+
+    // Emit drawing to other users
+    if (socket && user?.id) {
+      socket.emit('whiteboard:draw', {
+        interviewId,
+        drawing: {
+          fromX: lastPoint.x,
+          fromY: lastPoint.y,
+          toX: coords.x,
+          toY: coords.y,
+          color,
+          brushSize,
+        },
+        userId: user.id,
+      })
+    }
+
+    lastPointRef.current = coords
+  }
+
+  const handleMouseUp = () => {
+    setIsDrawing(false)
+    lastPointRef.current = null
+  }
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setObjects([])
+
+    if (socket) {
+      socket.emit('whiteboard:clear', { interviewId })
+    }
+  }
+
+  useEffect(() => {
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
+    return () => window.removeEventListener('resize', resizeCanvas)
+  }, [])
+
+  useEffect(() => {
+    redrawShapes()
+  }, [objects])
+
+  useEffect(() => {
+    if (!socket || !user) return
+
+    socket.off('whiteboard:draw')
+    socket.off('whiteboard:shape-add')
+    socket.off('whiteboard:clear')
+
+    socket.on('whiteboard:draw', (data: any) => {
+      if (data.userId !== user?.id) {
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+
+        ctx.save()
+        ctx.strokeStyle = data.drawing.color
+        ctx.lineWidth = data.drawing.brushSize
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+
+        ctx.beginPath()
+        ctx.moveTo(data.drawing.fromX, data.drawing.fromY)
+        ctx.lineTo(data.drawing.toX, data.drawing.toY)
+        ctx.stroke()
+
+        ctx.restore()
+      }
+    })
+
+    socket.on('whiteboard:shape-add', (data: any) => {
+      if (data.userId !== user?.id) {
+        setObjects(prev => [...prev, data.object])
+
+        // Draw immediately
+        const canvas = canvasRef.current
+        if (canvas) {
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            drawObject(ctx, data.object)
+          }
+        }
+      }
+    })
+
+    socket.on('whiteboard:clear', () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      setObjects([])
+    })
+
+    return () => {
+      socket.off('whiteboard:draw')
+      socket.off('whiteboard:shape-add')
+      socket.off('whiteboard:clear')
+    }
+  }, [socket, user?.id])
+
   return (
-    <div className="h-full flex flex-col bg-slate-950">
-      {/* Enhanced Toolbar */}
-      <div className="border-b border-slate-800/40 bg-slate-900/50 backdrop-blur-sm p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            {/* Color Picker */}
-            <div className="flex items-center gap-3 group">
-              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 shadow-lg shadow-blue-500/30 animate-pulse"></div>
-              <label className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                Color
-              </label>
-              <div className="relative">
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="w-10 h-10 rounded-lg border-2 border-slate-600 hover:border-slate-500 transition-all duration-200 cursor-pointer shadow-lg hover:shadow-xl"
-                  style={{ background: 'transparent' }}
-                />
-                <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-slate-700/50 to-slate-800/50 pointer-events-none"></div>
-              </div>
-            </div>
+    <div className="h-full flex bg-slate-950">
+      {/* Left Sidebar - Tools & Shapes */}
+      <div className="w-48 bg-slate-900/50 border-r border-slate-800/40 p-4 overflow-y-auto">
+        <h3 className="text-sm font-semibold text-slate-300 mb-4">Tools</h3>
 
-            {/* Brush Size */}
-            <div className="flex items-center gap-3 group">
-              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 shadow-lg shadow-emerald-500/30 animate-pulse"></div>
-              <label className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                Size
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={brushSize}
-                  onChange={(e) => setBrushSize(Number(e.target.value))}
-                  className="w-24 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider"
-                  style={{ background: 'transparent' }}
-                />
-                <div className="w-8 h-8 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg flex items-center justify-center border border-slate-500/50">
-                  <span className="text-xs font-bold text-white">{brushSize}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Clear Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearCanvas}
-            className="bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-300 transition-all duration-200 shadow-lg hover:shadow-red-500/20"
+        {/* Tool Selection */}
+        <div className="mb-6 space-y-2">
+          <button
+            onClick={() => setTool('pen')}
+            className={`w-full flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${tool === 'pen'
+                ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+                : 'bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:bg-slate-700/50'
+              }`}
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear Board
-          </Button>
+            <Pencil className="w-4 h-4" />
+            <span className="text-sm">Pen</span>
+          </button>
         </div>
 
-        {/* Status Indicator */}
-        <div className="mt-3 flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isDrawing ? 'bg-green-400 animate-pulse shadow-lg shadow-green-400/50' : 'bg-slate-600'}`}></div>
-          <span className="text-xs text-slate-400">
-            {isDrawing ? 'Drawing...' : 'Ready to draw'}
-          </span>
+        <h3 className="text-sm font-semibold text-slate-300 mb-4 mt-6">Shapes & Icons</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {SHAPE_PALETTE.map((shape) => (
+            <div
+              key={shape.type}
+              draggable
+              onDragStart={(e) => handleDragStart(e, shape)}
+              className="aspect-square bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-emerald-500/50 rounded-lg flex flex-col items-center justify-center cursor-move transition-all duration-200 group"
+              title={shape.label}
+            >
+              <shape.icon className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+              <span className="text-[10px] text-slate-500 group-hover:text-emerald-400 mt-1 text-center">{shape.label}</span>
+            </div>
+          ))}
         </div>
+
+        {/* Color Picker */}
+        <div className="mt-6">
+          <h4 className="text-xs font-semibold text-slate-400 mb-2">Color</h4>
+          <div className="grid grid-cols-4 gap-2">
+            {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'].map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-lg border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-slate-700 hover:scale-105'
+                  }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Brush Size */}
+        <div className="mt-6">
+          <h4 className="text-xs font-semibold text-slate-400 mb-2">Brush Size</h4>
+          <input
+            type="range"
+            min="1"
+            max="10"
+            value={brushSize}
+            onChange={(e) => setBrushSize(Number(e.target.value))}
+            className="w-full"
+          />
+          <div className="text-xs text-slate-500 text-center mt-1">{brushSize}px</div>
+        </div>
+
+        {/* Clear Button */}
+        <Button
+          onClick={clearCanvas}
+          variant="outline"
+          className="w-full mt-6 border-red-500/50 text-red-400 hover:bg-red-500/10"
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          Clear All
+        </Button>
       </div>
 
       {/* Canvas Area */}
-      <div className="flex-1 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 relative overflow-hidden min-h-0">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="w-full h-full bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.3)_1px,transparent_0)] bg-[length:20px_20px]"></div>
-        </div>
-
-        {/* Canvas Container */}
-        <div className="relative flex items-center justify-center h-full w-full min-h-0 min-w-0">
-          <div className="relative group w-full h-full max-w-full max-h-full">
-            {/* Canvas Shadow/Glow */}
-            <div className="absolute -inset-2 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-emerald-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-            <canvas
-              ref={canvasRef}
-              className="border border-slate-700/50 bg-white rounded-xl shadow-2xl hover:shadow-slate-500/10 transition-all duration-300 relative z-10 w-full h-full"
-              style={{
-                cursor: isDrawing ? 'crosshair' : 'grab',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain'
-              }}
-            />
-
-            {/* Canvas Hover Effect */}
-            <div className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-slate-600/30 transition-all duration-300 pointer-events-none"></div>
-          </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="absolute bottom-6 left-6 right-6 text-center">
-          <div className="inline-flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-full px-4 py-2 shadow-lg">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-            <span className="text-sm text-slate-300">
-              Use your mouse to draw • Changes sync in real-time • Collaborate with your interviewer
-            </span>
-          </div>
-        </div>
-
-        {/* Drawing Animation Indicator */}
-        {isDrawing && (
-          <div className="absolute top-6 right-6 bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/30 rounded-lg px-3 py-2 shadow-lg animate-in slide-in-from-right-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div>
-              <span className="text-sm text-emerald-300 font-medium">Drawing...</span>
-            </div>
-          </div>
-        )}
+      <div className="flex-1 p-4">
+        <canvas
+          ref={canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className="w-full h-full bg-white rounded-lg shadow-2xl cursor-crosshair"
+        />
       </div>
     </div>
   )
