@@ -7,6 +7,7 @@ import { FriendModule } from './friend/friend.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { PrismaModule } from './prisma/prisma.module';
 // import { RedisModule } from './redis/redis.module'; // Temporarily disabled
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     InterviewModule,
     FriendModule,
     WebSocketModule,
+    MailModule,
   ],
 })
 export class AppModule {}
