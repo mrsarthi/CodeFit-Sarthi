@@ -42,3 +42,8 @@ lerna-debug.log*
 # Prisma
 prisma/migrations
 
+
+# Validated Scripts
+scripts/verify_jwt.js
+scripts/verify_jwt_draft.js
+scripts/test_email_flow.js

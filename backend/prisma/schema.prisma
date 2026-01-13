@@ -39,6 +39,10 @@ model User {
   organization  Organization? @relation(fields: [organizationId], references: [id])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  isVerified    Boolean   @default(false)
+
+  // Relations
+  verificationToken VerificationToken?
 
   // Relations
   sentFriendRequests     FriendRequest[] @relation("Sender")
@@ -131,5 +135,16 @@ model Friend {
   @@index([userId])
   @@index([friendId])
   @@map("friends")
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("verification_tokens")
 }
 

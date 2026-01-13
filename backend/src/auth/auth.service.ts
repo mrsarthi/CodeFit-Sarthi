@@ -1,10 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -12,7 +14,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+    private mailService: MailService,
+  ) { }
 
   async register(registerDto: RegisterDto) {
     const { email, password, firstName, lastName, role, organizationId } = registerDto;
@@ -29,7 +32,7 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with isVerified = false
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -38,23 +41,29 @@ export class AuthService {
         lastName,
         role,
         organizationId: organizationId || null,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        organizationId: true,
+        isVerified: false,
       },
     });
 
-    // Generate tokens
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    // Generate Verification Token
+    const token = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours expiry
+
+    await this.prisma.verificationToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    // Send Verification Email
+    await this.mailService.sendVerificationEmail(user.email, token);
 
     return {
-      user,
-      ...tokens,
+      message: 'Registration successful. Please check your email to verify your account.',
+      userId: user.id,
     };
   }
 
@@ -77,6 +86,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check verification status
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Email not verified. Please check your inbox.');
+    }
+
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
@@ -88,44 +102,70 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role,
         organizationId: user.organizationId,
+        isVerified: user.isVerified,
       },
       ...tokens,
+    };
+  }
+
+  async verifyEmail(token: string) {
+    const verificationToken = await this.prisma.verificationToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!verificationToken) {
+      throw new BadRequestException('Invalid verification token');
+    }
+
+    if (new Date() > verificationToken.expiresAt) {
+      throw new BadRequestException('Verification token expired');
+    }
+
+    // Update user status
+    await this.prisma.user.update({
+      where: { id: verificationToken.userId },
+      data: { isVerified: true },
+    });
+
+    // Delete token
+    await this.prisma.verificationToken.delete({
+      where: { id: verificationToken.id },
+    });
+
+    return {
+      message: 'Email verified successfully',
     };
   }
 
   async refreshToken(refreshToken: string) {
-  try {
-    const payload = this.jwtService.verify(refreshToken, {
-      secret: this.configService.get('JWT_REFRESH_SECRET'),
-    });
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        organizationId: true,
-      },
-    });
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
 
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      if (!user.isVerified) {
+        throw new UnauthorizedException('Email not verified');
+      }
+
+      const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+      return {
+        user,
+        ...tokens,
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
-
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
-
-    // CRITICAL FIX: Return the user object so the frontend state doesn't reset to null
-    return {
-      user,
-      ...tokens,
-    };
-  } catch (error) {
-    throw new UnauthorizedException('Invalid refresh token');
   }
-}
 
   private async generateTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
@@ -147,19 +187,8 @@ export class AuthService {
   }
 
   async validateUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    return this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        organizationId: true,
-      },
     });
-
-    return user;
   }
 }
-

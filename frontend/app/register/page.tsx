@@ -20,6 +20,7 @@ export default function RegisterPage() {
     lastName: '',
     role: 'JOB_SEEKER' as 'JOB_SEEKER' | 'INTERVIEWER',
   })
+  const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -29,16 +30,38 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
-      const response = await api.post('/auth/register', formData)
-      const { user, accessToken, refreshToken } = response.data
-
-      setAuth(user, accessToken, refreshToken)
-      router.push('/welcome')
+      await api.post('/auth/register', formData)
+      setSuccess(true)
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden flex items-center justify-center">
+        <div className="max-w-md w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-8 backdrop-blur-xl shadow-2xl text-center">
+          <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Sparkles className="w-8 h-8 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">Check your inbox</h2>
+          <p className="text-slate-300 mb-8">
+            We've sent a verification link to <span className="font-semibold text-white">{formData.email}</span>.
+            Please verify your email to continue.
+          </p>
+          <div className="space-y-4">
+            <Link
+              href="/login"
+              className="block w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors"
+            >
+              Back to Sign in
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
