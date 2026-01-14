@@ -1,18 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailService {
-    private resend: Resend;
+    private transporter: nodemailer.Transporter;
     private readonly logger = new Logger(MailService.name);
 
     constructor(private configService: ConfigService) {
-        const apiKey = this.configService.get('RESEND_API_KEY');
-        if (!apiKey) {
-            this.logger.error('RESEND_API_KEY is not defined in environment variables');
+        const user = this.configService.get('MAIL_USER');
+        const pass = this.configService.get('MAIL_PASS');
+
+        if (!user || !pass) {
+            this.logger.error('MAIL_USER or MAIL_PASS is not defined in environment variables');
         }
-        this.resend = new Resend(apiKey);
+
+        this.transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user,
+                pass,
+            },
+        });
     }
 
     async sendVerificationEmail(email: string, token: string) {
@@ -20,8 +29,8 @@ export class MailService {
         const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
 
         try {
-            await this.resend.emails.send({
-                from: 'CodeFit <onboarding@resend.dev>', // Use resend.dev for testing if no domain
+            await this.transporter.sendMail({
+                from: `"CodeFit" <${this.configService.get('MAIL_USER')}>`,
                 to: email,
                 subject: 'Verify your CodeFit Email',
                 html: `
