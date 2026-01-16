@@ -441,8 +441,8 @@ export default function EmployeeDetailPage() {
                                             fontSize: '12px',
                                         }}
                                         labelFormatter={(value) => formatDate(value)}
-                                        formatter={(value: number) => [
-                                            activeMetric === 'timeSpent' ? formatTimeSpent(value) : value,
+                                        formatter={(value: number | undefined) => [
+                                            activeMetric === 'timeSpent' ? formatTimeSpent(value ?? 0) : (value ?? 0),
                                             activeMetric === 'timeSpent' ? 'Time Spent' : 'Interviews'
                                         ]}
                                     />
