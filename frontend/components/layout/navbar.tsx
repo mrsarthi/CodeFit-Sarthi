@@ -21,12 +21,12 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center space-x-4">
-          <Link href="/welcome" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">CF</span>
-            </div>
-            <span className="text-xl font-semibold text-foreground">CodeFit</span>
-          </Link>
+            <Link href="/welcome" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-sm">CF</span>
+              </div>
+              <span className="text-xl font-semibold text-foreground">CodeFit</span>
+            </Link>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -40,12 +40,14 @@ export function Navbar() {
                 Home
               </Button>
             </Link>
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-muted rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-muted-foreground" />
+            <Link href={`/dashboard/employee/${user?.id}`}>
+              <div className="flex items-center space-x-2 cursor-pointer hover:bg-muted rounded-md px-3 py-2 transition-colors">
+                <div className="w-6 h-6 bg-muted rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <span className="text-sm text-foreground">{user?.firstName} {user?.lastName}</span>
               </div>
-              <span className="text-sm text-foreground">{user?.firstName} {user?.lastName}</span>
-            </div>
+            </Link>
             <Button
               variant="ghost"
               size="sm"

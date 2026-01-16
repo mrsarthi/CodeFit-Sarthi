@@ -51,6 +51,7 @@ model User {
   friendOf               Friend[]       @relation("Friend")
   interviewsAsCandidate   InterviewParticipant[] @relation("Candidate")
   interviewsAsInterviewer InterviewParticipant[] @relation("Interviewer")
+  activities             UserActivity[]
 
   @@index([email])
   @@index([role])
@@ -146,5 +147,19 @@ model VerificationToken {
   createdAt DateTime @default(now())
 
   @@map("verification_tokens")
+}
+
+model UserActivity {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+  duration  Int?      // Duration in seconds
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([startTime])
+  @@map("user_activities")
 }
 

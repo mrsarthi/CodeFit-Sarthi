@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { InterviewModule } from './interview/interview.module';
@@ -15,6 +16,7 @@ import { MailModule } from './mail/mail.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     // RedisModule, // Temporarily disabled - enable after installing Redis
     AuthModule,
@@ -25,5 +27,5 @@ import { MailModule } from './mail/mail.module';
     MailModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }
 
