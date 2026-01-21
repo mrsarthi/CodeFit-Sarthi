@@ -441,12 +441,12 @@ export default function InterviewRoomPage() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="flex items-center space-x-3 text-slate-400 hover:text-white transition-all duration-300 group">
+              <Link href="/welcome" className="flex items-center space-x-3 text-slate-400 hover:text-white transition-all duration-300 group">
                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                   <Video className="w-4 h-4 text-white transition-transform group-hover:scale-110" />
                 </div>
                 <span className="text-lg font-semibold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent group-hover:from-emerald-300 group-hover:to-teal-300 transition-all duration-300">
-                  Interview Room
+                  CodeFit
                 </span>
               </Link>
             </div>

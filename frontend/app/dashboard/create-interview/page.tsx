@@ -114,10 +114,10 @@ export default function CreateInterviewPage() {
   if (!mounted) return null
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="relative">
       {/* Animated Gradient Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent dark:from-blue-500/20" />
+      <div className="fixed inset-0 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20 -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent dark:from-blue-500/20 -z-10" />
 
       <div className="relative container mx-auto px-4 py-12 max-w-4xl animate-in fade-in duration-700">
         {/* Header Section */}
