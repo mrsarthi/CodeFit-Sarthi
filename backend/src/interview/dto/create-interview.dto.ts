@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsArray, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsArray, IsUUID, IsBoolean } from 'class-validator';
 
 export class CreateInterviewDto {
   @IsString()
@@ -15,5 +15,9 @@ export class CreateInterviewDto {
   @IsArray()
   @IsUUID('4', { each: true })
   participantIds: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  startNow?: boolean;
 }
 

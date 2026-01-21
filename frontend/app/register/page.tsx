@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/lib/store'
 import api from '@/lib/api'
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     password: '',
     firstName: '',
     lastName: '',
+    role: 'JOB_SEEKER',
   })
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -152,6 +154,22 @@ export default function RegisterPage() {
                   required
                   className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="role" className="text-sm font-medium text-white">
+                  I want to
+                </Label>
+                <Select
+                  id="role"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all h-auto"
+                >
+                  <option value="JOB_SEEKER" className="bg-slate-900">Find a Job</option>
+                  <option value="INTERVIEWER" className="bg-slate-900">Interview Candidates</option>
+                </Select>
               </div>
 
               <div className="space-y-3">

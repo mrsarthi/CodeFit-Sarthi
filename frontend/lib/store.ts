@@ -8,6 +8,7 @@ interface User {
   lastName: string;
   role: 'JOB_SEEKER' | 'INTERVIEWER';
   organizationId?: string;
+  onboardingCompleted: boolean;
 }
 
 interface AuthState {
@@ -73,9 +74,9 @@ export const getAuthState = () => {
       accessToken: null,
       refreshToken: null,
       isHydrated: false,
-      setAuth: () => {},
-      clearAuth: () => {},
-      updateUser: () => {},
+      setAuth: () => { },
+      clearAuth: () => { },
+      updateUser: () => { },
     };
   }
   return useAuthStore.getState();

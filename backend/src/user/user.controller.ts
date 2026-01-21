@@ -1,6 +1,7 @@
-import { Controller, Get, UseGuards, Request, Query, Param, Patch, Body } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request, Query, Param, Patch, Body, InternalServerErrorException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -10,6 +11,19 @@ export class UserController {
   @Get('me')
   async getMe(@Request() req) {
     return this.userService.findById(req.user.id);
+  }
+
+  @Patch('onboarding')
+  async completeOnboarding(
+    @Body() data: CompleteOnboardingDto,
+    @Request() req,
+  ) {
+    try {
+      return await this.userService.completeOnboarding(req.user.id, data.role);
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      throw new InternalServerErrorException(error instanceof Error ? error.message : 'Failed to complete onboarding');
+    }
   }
 
   @Get('search')
@@ -66,12 +80,6 @@ export class UserController {
     return this.userService.updateUserProfile(id, data);
   }
 
-  @Patch('onboarding')
-  async completeOnboarding(
-    @Body() data: { role: 'JOB_SEEKER' | 'INTERVIEWER' },
-    @Request() req,
-  ) {
-    return this.userService.completeOnboarding(req.user.id, data.role);
-  }
+
 }
 

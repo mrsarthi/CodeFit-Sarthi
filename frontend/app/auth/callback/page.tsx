@@ -35,8 +35,12 @@ export default function AuthCallbackPage() {
                 // Store auth data
                 setAuth(user, accessToken, refreshToken)
 
-                // Redirect to welcome page
-                router.push('/welcome')
+                // Redirect to welcome page or onboarding
+                if (user.onboardingCompleted) {
+                    router.push('/welcome')
+                } else {
+                    router.push('/onboarding')
+                }
             } catch (err: any) {
                 console.error('OAuth callback error:', err)
                 setError(err.response?.data?.message || 'Authentication failed')

@@ -15,24 +15,24 @@ export const getSocket = (token: string): Socket => {
   if (existingSocket) {
     // If connected, return it
     if (existingSocket.connected) {
-      console.log('Socket: Returning existing connected socket for token:', token.substring(0, 10) + '...');
+      // console.log('Socket: Returning existing connected socket for token:', token.substring(0, 10) + '...');
       return existingSocket;
     }
 
     // If explicitly disconnected, clean it up
     if (existingSocket.disconnected) {
-      console.log('Socket: Found disconnected socket, cleaning up and creating new one:', token.substring(0, 10) + '...');
+      // console.log('Socket: Found disconnected socket, cleaning up and creating new one:', token.substring(0, 10) + '...');
       existingSocket.removeAllListeners(); // Clean up listeners
       socketMap.delete(token);
     } else {
       // Socket exists but is not connected yet (likely connecting)
       // Return it to avoid creating duplicates
-      console.log('Socket: Returning existing socket (connecting) for token:', token.substring(0, 10) + '...');
+      // console.log('Socket: Returning existing socket (connecting) for token:', token.substring(0, 10) + '...');
       return existingSocket;
     }
   }
 
-  console.log('Socket: Creating new socket connection for token:', token.substring(0, 10) + '...');
+  // console.log('Socket: Creating new socket connection for token:', token.substring(0, 10) + '...');
   const socket = io(WS_URL, {
     auth: {
       token,
@@ -64,4 +64,3 @@ export const disconnectSocket = (token?: string) => {
     socketMap.clear();
   }
 };
-

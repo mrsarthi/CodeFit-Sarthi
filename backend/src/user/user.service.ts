@@ -222,23 +222,31 @@ export class UserService {
   }
 
   async completeOnboarding(userId: string, role: 'JOB_SEEKER' | 'INTERVIEWER') {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        role,
-        onboardingCompleted: true,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        onboardingCompleted: true,
-        organizationId: true,
-        createdAt: true,
-      },
-    });
+    console.log(`UserService.completeOnboarding called for userId: ${userId} with role: ${role}`);
+    try {
+      const updateResult = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          role,
+          onboardingCompleted: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          onboardingCompleted: true,
+          organizationId: true,
+          createdAt: true,
+        },
+      });
+      console.log('UserService.completeOnboarding successful update:', JSON.stringify(updateResult));
+      return updateResult;
+    } catch (err) {
+      console.error('UserService.completeOnboarding Prisma Error:', err);
+      throw err;
+    }
   }
 }
 

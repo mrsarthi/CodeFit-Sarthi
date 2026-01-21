@@ -4,15 +4,18 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Video, Code, PenTool, Users, Zap, Shield, Star, ArrowRight, Github, Sparkles, MousePointer } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 export default function LandingPage() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const cursorRef = useRef<HTMLDivElement>(null)
   const [isHovering, setIsHovering] = useState(false)
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
+      if (cursorRef.current) {
+        cursorRef.current.style.left = `${e.clientX - 12}px`
+        cursorRef.current.style.top = `${e.clientY - 12}px`
+      }
     }
 
     const handleMouseEnter = () => setIsHovering(true)
@@ -40,14 +43,15 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       {/* Custom Cursor */}
       <div
-        className={`fixed w-6 h-6 pointer-events-none z-50 transition-all duration-200 ${
-          isHovering ? 'scale-150 bg-blue-400' : 'scale-100 bg-white/20'
-        }`}
+        ref={cursorRef}
+        className={`fixed w-6 h-6 pointer-events-none z-50 transition-colors duration-200 ${isHovering ? 'scale-150 bg-blue-400' : 'scale-100 bg-white/20'
+          }`}
         style={{
-          left: mousePosition.x - 12,
-          top: mousePosition.y - 12,
+          left: -20,
+          top: -20,
           borderRadius: isHovering ? '50%' : '25%',
           backdropFilter: 'blur(4px)',
+          transitionProperty: 'background-color, border-radius, transform',
         }}
       />
       {/* Animated Background */}

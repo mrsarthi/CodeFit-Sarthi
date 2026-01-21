@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/lib/store'
 import api from '@/lib/api'
-import { Calendar, Users, Video, Plus, UserPlus, Sparkles, Target, TrendingUp, Clock } from 'lucide-react'
+import { Calendar, Users, Video, Plus, UserPlus, Sparkles, Target, TrendingUp, Clock, CheckCircle, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { FriendList } from '@/components/friends/FriendList'
 
@@ -17,6 +17,8 @@ interface Interview {
   description?: string
   status: string
   scheduledAt?: string
+  createdAt: string
+  updatedAt: string
   participants: Array<{
     candidate?: { id: string; firstName: string; lastName: string }
     interviewer?: { id: string; firstName: string; lastName: string }
@@ -25,18 +27,36 @@ interface Interview {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const user = useAuthStore((state) => state.user)
+  // Use a selector that returns both user and updateUser to avoid unnecessary re-renders
+  const { user, updateUser } = useAuthStore((state) => ({
+    user: state.user,
+    updateUser: state.updateUser
+  }))
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login')
-      return
+    const init = async () => {
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
+      try {
+        // Always fetch latest user data to ensure role and other details are in sync
+        const { data } = await api.get('/users/me')
+        if (updateUser) {
+          updateUser(data)
+        }
+      } catch (err) {
+        console.error('Failed to sync user data:', err)
+      }
+
+      fetchInterviews()
     }
 
-    fetchInterviews()
-  }, [user])
+    init()
+  }, [])
 
   const fetchInterviews = async () => {
     try {
@@ -51,6 +71,27 @@ export default function DashboardPage() {
 
   const handleJoinInterview = (interviewId: string) => {
     router.push(`/interview/${interviewId}`)
+  }
+
+  const handleCompleteInterview = async (interviewId: string) => {
+    try {
+      await api.patch(`/interviews/${interviewId}/end`)
+      fetchInterviews()
+    } catch (error) {
+      console.error('Failed to complete interview:', error)
+    }
+  }
+
+  const handleDeleteInterview = async (interviewId: string) => {
+    if (!confirm('Are you sure you want to delete this interview? This action cannot be undone.')) {
+      return
+    }
+    try {
+      await api.delete(`/interviews/${interviewId}`)
+      fetchInterviews()
+    } catch (error) {
+      console.error('Failed to delete interview:', error)
+    }
   }
 
   if (loading) {
@@ -73,7 +114,7 @@ export default function DashboardPage() {
       <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse delay-1000" />
 
       {/* Animated Particles */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-indigo-400 rounded-full animate-bounce opacity-60 shadow-lg shadow-indigo-400/50" />
         <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-blue-400 rounded-full animate-bounce opacity-40 shadow-lg shadow-blue-400/50" />
         <div className="absolute bottom-1/4 left-1/3 w-3 h-3 bg-cyan-400 rounded-full animate-bounce opacity-50 shadow-lg shadow-cyan-400/50" />
@@ -251,13 +292,12 @@ export default function DashboardPage() {
                                 <h3 className="text-xl font-bold text-white group-hover:text-indigo-100 transition-colors duration-300 mb-1">
                                   {interview.title}
                                 </h3>
-                                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
-                                  interview.status === 'ACTIVE'
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                    : interview.status === 'SCHEDULED'
+                                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${interview.status === 'ACTIVE'
+                                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                  : interview.status === 'SCHEDULED'
                                     ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                     : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
-                                }`}>
+                                  }`}>
                                   {interview.status.toLowerCase()}
                                 </span>
                               </div>
@@ -299,12 +339,35 @@ export default function DashboardPage() {
                             {(interview.status === 'SCHEDULED' || interview.status === 'ACTIVE') && (
                               <Button
                                 onClick={() => handleJoinInterview(interview.id)}
-                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-xl shadow-green-500/25 rounded-xl px-6 py-4 font-semibold transform hover:scale-105 transition-all duration-200 group-hover:shadow-green-500/40"
+                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-xl shadow-green-500/25 rounded-xl px-6 py-4 font-semibold w-full transform hover:scale-105 transition-all duration-200 group-hover:shadow-green-500/40"
                               >
                                 <Video className="w-5 h-5 mr-2" />
-                                Join Interview
+                                Join
                               </Button>
                             )}
+
+                            <div className="flex flex-col gap-3 mt-3 w-full">
+                              {interview.status === 'ACTIVE' && (
+                                <Button
+                                  onClick={() => handleCompleteInterview(interview.id)}
+                                  className="bg-slate-700 hover:bg-slate-600 text-white border-0 rounded-xl px-6 py-4 font-semibold w-full transition-all duration-200"
+                                >
+                                  <CheckCircle className="w-5 h-5 mr-2" />
+                                  Mark Completed
+                                </Button>
+                              )}
+
+                              {user?.role === 'INTERVIEWER' && (
+                                <Button
+                                  onClick={() => handleDeleteInterview(interview.id)}
+                                  variant="outline"
+                                  className="border-red-900/50 text-red-400 hover:bg-red-950/50 hover:text-red-300 hover:border-red-800 rounded-xl px-6 py-4 font-semibold w-full transition-all duration-200"
+                                >
+                                  <Trash2 className="w-5 h-5 mr-2" />
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -312,7 +375,87 @@ export default function DashboardPage() {
                   })}
                 </div>
               )}
+
+              {/* Completed Interviews Section */}
+              {interviews.filter(i => i.status === 'COMPLETED').length > 0 && (
+                <div className="mt-12 space-y-6">
+                  <h2 className="text-2xl font-bold text-white flex items-center">
+                    <CheckCircle className="w-6 h-6 mr-3 text-green-400" />
+                    Completed Interviews
+                  </h2>
+                  <div className="grid gap-6">
+                    {interviews.filter(i => i.status === 'COMPLETED').map((interview, index) => {
+                      const otherParticipant = interview.participants.find(
+                        (p) => p.candidate?.id !== user?.id && p.interviewer?.id !== user?.id
+                      )?.candidate || interview.participants.find(
+                        (p) => p.candidate?.id !== user?.id && p.interviewer?.id !== user?.id
+                      )?.interviewer
+
+                      return (
+                        <div
+                          key={interview.id}
+                          className="group bg-gradient-to-br from-slate-900/50 to-slate-950/50 border border-slate-800/50 rounded-xl p-6 backdrop-blur-sm hover:border-slate-700/50 transition-all duration-300"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-bold text-slate-300 group-hover:text-white transition-colors">
+                                {interview.title}
+                              </h3>
+                              <p className="text-slate-500 text-sm mb-3">
+                                {format(new Date(interview.updatedAt || interview.createdAt), 'MMM d, yyyy')}
+                              </p>
+                              {otherParticipant && (
+                                <div className="text-sm text-slate-400 flex items-center gap-2">
+                                  <Users className="w-4 h-4" />
+                                  with {otherParticipant.firstName} {otherParticipant.lastName}
+                                </div>
+                              )}
+                            </div>
+
+                            {user?.role === 'INTERVIEWER' && (
+                              <Button
+                                onClick={() => handleDeleteInterview(interview.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-slate-500 hover:text-red-400 hover:bg-red-950/30"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {user?.role === 'INTERVIEWER' && (
+              <div className="space-y-8">
+                {/* Quick Actions for Interviewer */}
+                <div className="bg-gradient-to-br from-indigo-950/50 to-indigo-900/30 border border-indigo-500/20 rounded-2xl p-8 backdrop-blur-xl">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center">
+                    <Target className="w-6 h-6 mr-3 text-indigo-400" />
+                    Quick Actions
+                  </h3>
+                  <div className="space-y-4">
+                    <Link href="/dashboard/create-interview">
+                      <div className="flex items-center space-x-3 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800/70 hover:border-slate-600/50 transition-all duration-300 cursor-pointer group">
+                        <Plus className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform duration-200" />
+                        <span className="text-slate-300 group-hover:text-white transition-colors duration-200">Create New Interview</span>
+                      </div>
+                    </Link>
+                    <Link href="/welcome">
+                      <div className="flex items-center space-x-3 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800/70 hover:border-slate-600/50 transition-all duration-300 cursor-pointer group">
+                        <Sparkles className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform duration-200" />
+                        <span className="text-slate-300 group-hover:text-white transition-colors duration-200">View Dashboard Home</span>
+                      </div>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {user?.role === 'JOB_SEEKER' && (
               <div className="space-y-8">

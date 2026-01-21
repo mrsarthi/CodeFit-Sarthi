@@ -7,6 +7,7 @@ import {
   UseGuards,
   Request,
   Patch,
+  Delete,
 } from '@nestjs/common';
 import { InterviewService } from './interview.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
@@ -15,7 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('interviews')
 @UseGuards(JwtAuthGuard)
 export class InterviewController {
-  constructor(private readonly interviewService: InterviewService) {}
+  constructor(private readonly interviewService: InterviewService) { }
 
   @Post()
   async create(@Body() createInterviewDto: CreateInterviewDto, @Request() req) {
@@ -40,6 +41,11 @@ export class InterviewController {
   @Patch(':id/end')
   async end(@Param('id') id: string, @Request() req) {
     return this.interviewService.end(id, req.user.id);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Request() req) {
+    return this.interviewService.delete(id, req.user.id);
   }
 }
 

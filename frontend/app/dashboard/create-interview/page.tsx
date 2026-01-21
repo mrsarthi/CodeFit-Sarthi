@@ -9,10 +9,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/lib/store'
 import api from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export default function CreateInterviewPage() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
+  const [mode, setMode] = useState<'schedule' | 'now'>('schedule')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -75,8 +77,25 @@ export default function CreateInterviewPage() {
     setLoading(true)
 
     try {
-      await api.post('/interviews', formData)
-      router.push('/dashboard')
+      const payload: any = {
+        title: formData.title,
+        description: formData.description,
+        participantIds: formData.participantIds,
+        startNow: mode === 'now',
+      }
+
+      // Only include scheduledAt if we are in schedule mode and it has a value
+      if (mode === 'schedule' && formData.scheduledAt) {
+        payload.scheduledAt = formData.scheduledAt
+      }
+
+      const response = await api.post('/interviews', payload)
+
+      if (mode === 'now') {
+        router.push(`/interview/${response.data.id}`)
+      } else {
+        router.push('/dashboard')
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create interview')
     } finally {
@@ -134,6 +153,40 @@ export default function CreateInterviewPage() {
                 </div>
               )}
 
+              {/* Mode Selection */}
+              <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setMode('schedule')}
+                  className={cn(
+                    "py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2",
+                    mode === 'schedule'
+                      ? "bg-white dark:bg-slate-700 shadow-sm text-violet-600 dark:text-violet-400"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  )}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Schedule for Later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('now')}
+                  className={cn(
+                    "py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2",
+                    mode === 'now'
+                      ? "bg-white dark:bg-slate-700 shadow-sm text-green-600 dark:text-green-400"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  )}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Start Immediately
+                </button>
+              </div>
+
               {/* Interview Details Section */}
               <div className="space-y-6 p-6 rounded-xl bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/10">
                 <div className="flex items-center gap-2 mb-4">
@@ -176,55 +229,57 @@ export default function CreateInterviewPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="scheduledDate" className="text-sm font-medium flex items-center gap-2">
-                      <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Date
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="scheduledDate"
-                        type="date"
-                        value={formData.scheduledAt ? formData.scheduledAt.split('T')[0] : ''}
-                        onChange={(e) => {
-                          const time = formData.scheduledAt ? formData.scheduledAt.split('T')[1] : '09:00'
-                          setFormData({ ...formData, scheduledAt: e.target.value ? `${e.target.value}T${time}` : '' })
-                        }}
-                        className="transition-all duration-300 focus:ring-2 focus:ring-violet-500/50 border-violet-500/20 pl-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                      />
-                      <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-violet-600 dark:text-violet-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                {mode === 'schedule' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduledDate" className="text-sm font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Date
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="scheduledDate"
+                          type="date"
+                          value={formData.scheduledAt ? formData.scheduledAt.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const time = formData.scheduledAt ? formData.scheduledAt.split('T')[1] : '09:00'
+                            setFormData({ ...formData, scheduledAt: e.target.value ? `${e.target.value}T${time}` : '' })
+                          }}
+                          className="transition-all duration-300 focus:ring-2 focus:ring-violet-500/50 border-violet-500/20 pl-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                        />
+                        <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-violet-600 dark:text-violet-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="scheduledTime" className="text-sm font-medium flex items-center gap-2">
-                      <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Time
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="scheduledTime"
-                        type="time"
-                        value={formData.scheduledAt ? formData.scheduledAt.split('T')[1] || '09:00' : '09:00'}
-                        onChange={(e) => {
-                          const date = formData.scheduledAt ? formData.scheduledAt.split('T')[0] : new Date().toISOString().split('T')[0]
-                          setFormData({ ...formData, scheduledAt: `${date}T${e.target.value}` })
-                        }}
-                        className="transition-all duration-300 focus:ring-2 focus:ring-violet-500/50 border-violet-500/20 pl-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                      />
-                      <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-violet-600 dark:text-violet-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduledTime" className="text-sm font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Time
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="scheduledTime"
+                          type="time"
+                          value={formData.scheduledAt ? formData.scheduledAt.split('T')[1] || '09:00' : '09:00'}
+                          onChange={(e) => {
+                            const date = formData.scheduledAt ? formData.scheduledAt.split('T')[0] : new Date().toISOString().split('T')[0]
+                            setFormData({ ...formData, scheduledAt: `${date}T${e.target.value}` })
+                          }}
+                          className="transition-all duration-300 focus:ring-2 focus:ring-violet-500/50 border-violet-500/20 pl-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                        />
+                        <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-violet-600 dark:text-violet-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Candidate Selection Section */}
@@ -392,19 +447,30 @@ export default function CreateInterviewPage() {
                 <Button
                   type="submit"
                   disabled={loading || formData.participantIds.length === 0}
-                  className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-violet-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className={cn(
+                    "flex-1 bg-gradient-to-r transition-all duration-300 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                    mode === 'now'
+                      ? "from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-green-500/50"
+                      : "from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-violet-500/50"
+                  )}
                 >
                   {loading ? (
                     <>
                       <div className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating...
+                      {mode === 'now' ? 'Starting...' : 'Creating...'}
                     </>
                   ) : (
                     <>
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Create Interview
+                      {mode === 'now' ? (
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {mode === 'now' ? 'Start Interview Now' : 'Schedule Interview'}
                     </>
                   )}
                 </Button>
@@ -527,4 +593,3 @@ export default function CreateInterviewPage() {
     </div>
   )
 }
-
