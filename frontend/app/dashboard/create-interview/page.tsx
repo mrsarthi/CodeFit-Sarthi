@@ -45,7 +45,7 @@ export default function CreateInterviewPage() {
     try {
       const response = await api.get(`/users/search?q=${query}`)
       const filtered = response.data.filter(
-        (u: any) => u.role === 'JOB_SEEKER' && u.id !== user?.id
+        (u: any) => u.id !== user?.id
       )
       setCandidates(filtered)
     } catch (error) {

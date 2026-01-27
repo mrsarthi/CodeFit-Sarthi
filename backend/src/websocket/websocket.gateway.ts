@@ -419,6 +419,52 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     });
   }
 
+  @SubscribeMessage('code:language-change')
+  async handleLanguageChange(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { interviewId: string; language: { id: number; name: string; monaco: string }; newCode?: string },
+  ) {
+    console.log('Backend: Received code:language-change from user:', client.userId, 'language:', data.language.name);
+
+    // Broadcast language change to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('code:language-change', {
+      language: data.language,
+      newCode: data.newCode,
+      userId: client.userId,
+      user: client.user,
+    });
+
+    console.log('Backend: Broadcasted code:language-change to room:', data.interviewId);
+  }
+
+  @SubscribeMessage('code:output')
+  async handleCodeOutput(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: {
+      interviewId: string;
+      output: string | null;
+      error: string | null;
+      isRunning: boolean;
+      executionTime: string | null;
+      executionMemory: number | null;
+    },
+  ) {
+    console.log('Backend: Received code:output from user:', client.userId, 'isRunning:', data.isRunning);
+
+    // Broadcast output to other participants in the room
+    client.to(`interview:${data.interviewId}`).emit('code:output', {
+      output: data.output,
+      error: data.error,
+      isRunning: data.isRunning,
+      executionTime: data.executionTime,
+      executionMemory: data.executionMemory,
+      userId: client.userId,
+      user: client.user,
+    });
+
+    console.log('Backend: Broadcasted code:output to room:', data.interviewId);
+  }
+
   // Whiteboard sync
   @SubscribeMessage('whiteboard:draw')
   async handleWhiteboardDraw(
