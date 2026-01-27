@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Request, Query, Param, Patch, Body, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request, Query, Param, Patch, Body, InternalServerErrorException, Post } from '@nestjs/common';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
@@ -68,7 +68,6 @@ export class UserController {
     @Body() data: {
       firstName?: string;
       lastName?: string;
-      email?: string;
     },
     @Request() req,
   ) {
@@ -80,6 +79,4 @@ export class UserController {
     return this.userService.updateUserProfile(id, data);
   }
 
-
 }
-

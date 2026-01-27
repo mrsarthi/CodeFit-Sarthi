@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
+import { Navbar } from '@/components/layout/navbar'
 import api from '@/lib/api'
 import { Sparkles, Briefcase, Users, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -54,10 +55,11 @@ export default function OnboardingPage() {
     if (!user) return null
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden flex items-center justify-center p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+            <Navbar />
             <div className="absolute inset-0 bg-gradient-to-br from-blue-900/10 via-purple-900/5 to-cyan-900/10" />
 
-            <div className="max-w-4xl w-full relative z-10">
+            <div className="max-w-4xl w-full relative z-10 mx-auto py-12 px-6">
                 <div className="text-center mb-12">
                     <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/25">
                         <Sparkles className="w-8 h-8 text-white" />

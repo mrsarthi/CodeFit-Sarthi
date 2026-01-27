@@ -19,6 +19,7 @@ export class UserService {
         lastName: true,
         role: true,
         organizationId: true,
+        onboardingCompleted: true,
         createdAt: true,
       },
     });
@@ -163,7 +164,6 @@ export class UserService {
   async updateUserProfile(userId: string, data: {
     firstName?: string;
     lastName?: string;
-    email?: string;
   }) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -178,7 +178,6 @@ export class UserService {
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email,
       },
       select: {
         id: true,

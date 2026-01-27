@@ -36,6 +36,8 @@ export default function InterviewRoomPage() {
   const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map())
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const socketRef = useRef<any>(null)
+  const localStreamRef = useRef<MediaStream | null>(null)
+  const pendingParticipantsRef = useRef<string[]>([])
 
   useEffect(() => {
     if (!isHydrated) {
@@ -161,22 +163,26 @@ export default function InterviewRoomPage() {
         setParticipants((prev) => [...prev, data.user])
 
         // Create peer connection for new participant
-        if (localStream && data.user.id !== user?.id) {
-          console.log('Creating peer connection to user:', data.user.id)
-          createPeerConnection(data.user.id)
+        if (data.user.id !== user?.id) {
+          if (localStreamRef.current) {
+            console.log('Creating peer connection to user:', data.user.id)
+            createPeerConnection(data.user.id)
+          } else {
+            // Queue for later when localStream is ready
+            console.log('Queueing peer connection for user:', data.user.id, '(localStream not ready)')
+            pendingParticipantsRef.current.push(data.user.id)
+          }
         }
       })
 
       socket.on('error', (error: any) => {
         console.error('Interview: Received error from server:', error, 'user:', user?.id, 'role:', user?.role)
-        alert(`Connection Error: ${error.message || 'Failed to join interview'}`)
         setIsSocketConnected(false)
       })
 
       // Test event listener
       socket.on('test:message', (data: any) => {
         console.log('Interview: Received test message:', data)
-        alert(`Test message from ${data.fromUser}: ${data.message}`)
       })
 
       socket.on('interview:user-left', (data: any) => {
@@ -239,7 +245,11 @@ export default function InterviewRoomPage() {
   }
 
   const createPeerConnection = (targetUserId: string) => {
-    if (!localStream || peerConnectionsRef.current.has(targetUserId)) return
+    const stream = localStreamRef.current
+    if (!stream || peerConnectionsRef.current.has(targetUserId)) {
+      console.log('createPeerConnection: Skipping - stream:', !!stream, 'already has connection:', peerConnectionsRef.current.has(targetUserId))
+      return null
+    }
 
     const configuration = {
       iceServers: [
@@ -251,8 +261,8 @@ export default function InterviewRoomPage() {
     peerConnectionsRef.current.set(targetUserId, pc)
 
     // Add local stream tracks
-    localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, localStream)
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream)
     })
 
     // Handle remote stream
@@ -303,12 +313,23 @@ export default function InterviewRoomPage() {
         audio: true,
       })
 
+      // Update both ref and state
+      localStreamRef.current = stream
       setLocalStream(stream)
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
       }
 
-      // Create peer connections for existing participants
+      console.log('WebRTC: Local stream ready, processing pending participants:', pendingParticipantsRef.current.length)
+
+      // Create peer connections for any pending participants
+      pendingParticipantsRef.current.forEach((participantId) => {
+        console.log('Creating deferred peer connection to user:', participantId)
+        createPeerConnection(participantId)
+      })
+      pendingParticipantsRef.current = []
+
+      // Also create peer connections for existing participants
       participants.forEach((participant) => {
         if (participant.id !== user?.id) {
           createPeerConnection(participant.id)
@@ -346,26 +367,33 @@ export default function InterviewRoomPage() {
   }
 
   const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0]
+    const stream = localStreamRef.current
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0]
       if (videoTrack) {
-        videoTrack.enabled = !isVideoOn
-        setIsVideoOn(!isVideoOn)
+        videoTrack.enabled = !videoTrack.enabled
+        setIsVideoOn(videoTrack.enabled)
       }
     }
   }
 
   const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0]
+    const stream = localStreamRef.current
+    if (stream) {
+      const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) {
-        audioTrack.enabled = !isAudioOn
-        setIsAudioOn(!isAudioOn)
+        audioTrack.enabled = !audioTrack.enabled
+        setIsAudioOn(audioTrack.enabled)
       }
     }
   }
 
   const cleanup = () => {
+    // Stop local stream tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop())
+      localStreamRef.current = null
+    }
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop())
     }
@@ -375,6 +403,7 @@ export default function InterviewRoomPage() {
       pc.close()
     })
     peerConnectionsRef.current.clear()
+    pendingParticipantsRef.current = []
 
     if (socketRef.current) {
       socketRef.current.emit('interview:leave', { interviewId })
@@ -441,12 +470,12 @@ export default function InterviewRoomPage() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="flex items-center space-x-3 text-slate-400 hover:text-white transition-all duration-300 group">
+              <Link href="/welcome" className="flex items-center space-x-3 text-slate-400 hover:text-white transition-all duration-300 group">
                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                   <Video className="w-4 h-4 text-white transition-transform group-hover:scale-110" />
                 </div>
                 <span className="text-lg font-semibold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent group-hover:from-emerald-300 group-hover:to-teal-300 transition-all duration-300">
-                  Interview Room
+                  CodeFit
                 </span>
               </Link>
             </div>

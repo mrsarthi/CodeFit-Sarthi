@@ -28,7 +28,13 @@ export default function LoginPage() {
       const { user, accessToken, refreshToken } = response.data
 
       setAuth(user, accessToken, refreshToken)
-      router.push('/welcome')
+
+      // Redirect based on onboarding status
+      if (!user.onboardingCompleted) {
+        router.push('/onboarding')
+      } else {
+        router.push('/welcome')
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed')
     } finally {

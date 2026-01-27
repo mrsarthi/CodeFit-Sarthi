@@ -32,13 +32,22 @@ export default function AuthCallbackPage() {
 
                 const user = response.data
 
+                // Debug logging
+                console.log('🔍 OAuth Callback - User data:', {
+                    email: user.email,
+                    role: user.role,
+                    onboardingCompleted: user.onboardingCompleted,
+                })
+
                 // Store auth data
                 setAuth(user, accessToken, refreshToken)
 
                 // Redirect to welcome page or onboarding
                 if (user.onboardingCompleted) {
+                    console.log('✅ Redirecting to /welcome (onboarding completed)')
                     router.push('/welcome')
                 } else {
+                    console.log('⚠️ Redirecting to /onboarding (onboarding NOT completed)')
                     router.push('/onboarding')
                 }
             } catch (err: any) {

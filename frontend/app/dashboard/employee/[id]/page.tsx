@@ -54,7 +54,6 @@ export default function EmployeeDetailPage() {
     const [editForm, setEditForm] = useState({
         firstName: '',
         lastName: '',
-        email: '',
     })
 
     // Initial data load - only runs once when userId changes
@@ -92,7 +91,6 @@ export default function EmployeeDetailPage() {
             setEditForm({
                 firstName: userRes.data.firstName,
                 lastName: userRes.data.lastName,
-                email: userRes.data.email,
             })
 
             // Fetch statistics
@@ -175,10 +173,10 @@ export default function EmployeeDetailPage() {
     }
 
     return (
-        <div className="min-h-screen relative overflow-hidden">
+        <div className="relative">
             {/* Animated Gradient Background */}
-            <div className="fixed inset-0 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20" />
-            <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent dark:from-blue-500/20" />
+            <div className="fixed inset-0 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20 -z-10" />
+            <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent dark:from-blue-500/20 -z-10" />
 
             <div className="relative container mx-auto px-4 py-8 max-w-7xl">
                 {/* Header with Profile */}
@@ -213,11 +211,11 @@ export default function EmployeeDetailPage() {
                                             </div>
                                         </div>
                                         <div>
-                                            <Label>Email</Label>
+                                            <Label>Email (Read-only)</Label>
                                             <Input
-                                                value={editForm.email}
-                                                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                                                className="mt-1"
+                                                value={user.email}
+                                                disabled
+                                                className="mt-1 bg-slate-800/50 cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="flex gap-2">

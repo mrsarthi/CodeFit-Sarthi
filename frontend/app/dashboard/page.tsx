@@ -103,18 +103,18 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+    <div className="relative">
       {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 via-blue-900/5 to-cyan-900/10" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(79,70,229,0.1),transparent_70%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(59,130,246,0.1),transparent_70%)]" />
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 via-blue-900/5 to-cyan-900/10 -z-10" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(79,70,229,0.1),transparent_70%)] -z-10" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(59,130,246,0.1),transparent_70%)] -z-10" />
 
       {/* Floating Elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-indigo-500/5 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-indigo-500/5 rounded-full blur-3xl animate-pulse -z-10" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse delay-1000 -z-10" />
 
       {/* Animated Particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-indigo-400 rounded-full animate-bounce opacity-60 shadow-lg shadow-indigo-400/50" />
         <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-blue-400 rounded-full animate-bounce opacity-40 shadow-lg shadow-blue-400/50" />
         <div className="absolute bottom-1/4 left-1/3 w-3 h-3 bg-cyan-400 rounded-full animate-bounce opacity-50 shadow-lg shadow-cyan-400/50" />
@@ -236,22 +236,23 @@ export default function DashboardPage() {
                   <Video className="w-6 h-6 mr-3 text-indigo-400" />
                   Your Interviews
                 </h2>
-                {user?.role === 'INTERVIEWER' && interviews.length > 0 && (
+                {user?.role === 'INTERVIEWER' && interviews.filter(i => i.status !== 'COMPLETED').length > 0 && (
                   <div className="text-sm text-slate-400">
-                    {interviews.length} interview{interviews.length !== 1 ? 's' : ''} total
+                    {interviews.filter(i => i.status !== 'COMPLETED').length} active interview{interviews.filter(i => i.status !== 'COMPLETED').length !== 1 ? 's' : ''}
                   </div>
                 )}
               </div>
 
-              {interviews.length === 0 ? (
+              {/* Filter out completed interviews for the main section */}
+              {interviews.filter(i => i.status !== 'COMPLETED').length === 0 ? (
                 <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 rounded-2xl p-16 text-center backdrop-blur-xl">
                   <div className="w-20 h-20 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-slate-600/25">
                     <Calendar className="w-10 h-10 text-slate-400" />
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-4">No interviews yet</h3>
+                  <h3 className="text-2xl font-bold text-white mb-4">No active interviews</h3>
                   <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
                     {user?.role === 'INTERVIEWER'
-                      ? 'Create your first interview to start connecting with talented developers.'
+                      ? 'Create a new interview to start connecting with talented developers.'
                       : 'You don\'t have any scheduled interviews yet. Check back later!'
                     }
                   </p>
@@ -259,14 +260,14 @@ export default function DashboardPage() {
                     <Link href="/dashboard/create-interview">
                       <Button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 shadow-xl shadow-indigo-500/25 rounded-xl px-8 py-4 text-lg font-semibold transform hover:scale-105 transition-all duration-200">
                         <Plus className="w-5 h-5 mr-3" />
-                        Create Your First Interview
+                        Create a New Interview
                       </Button>
                     </Link>
                   )}
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {interviews.map((interview, index) => {
+                  {interviews.filter(i => i.status !== 'COMPLETED').map((interview, index) => {
                     const otherParticipant = interview.participants.find(
                       (p) => p.candidate?.id !== user?.id && p.interviewer?.id !== user?.id
                     )?.candidate || interview.participants.find(

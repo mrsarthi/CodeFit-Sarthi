@@ -32,13 +32,29 @@ export const getSocket = (token: string): Socket => {
     }
   }
 
-  // console.log('Socket: Creating new socket connection for token:', token.substring(0, 10) + '...');
+  console.log('Socket: Creating new socket connection for token:', token.substring(0, 10) + '...');
   const socket = io(WS_URL, {
     auth: {
       token,
     },
-    transports: ['websocket'],
-    // Remove forceNew to allow socket.io to reuse connections properly
+    transports: ['websocket', 'polling'], // Allow fallback to polling
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 10000,
+  });
+
+  // Add connection state logging
+  socket.on('connect', () => {
+    console.log('Socket: Connected successfully, id:', socket.id);
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('Socket: Connection error:', error.message);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Socket: Disconnected, reason:', reason);
   });
 
   // Store the socket

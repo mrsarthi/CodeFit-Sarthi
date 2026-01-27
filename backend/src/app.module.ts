@@ -9,6 +9,7 @@ import { WebSocketModule } from './websocket/websocket.module';
 import { PrismaModule } from './prisma/prisma.module';
 // import { RedisModule } from './redis/redis.module'; // Temporarily disabled
 import { MailModule } from './mail/mail.module';
+import { CodeExecutionModule } from './code-execution/code-execution.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MailModule } from './mail/mail.module';
     FriendModule,
     WebSocketModule,
     MailModule,
+    CodeExecutionModule,
   ],
 })
 export class AppModule { }
