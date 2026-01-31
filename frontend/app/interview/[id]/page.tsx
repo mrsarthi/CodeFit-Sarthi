@@ -113,8 +113,8 @@ export default function InterviewRoomPage() {
       socketRef.current = socket
       console.log('Interview: Socket created, initial connected status:', socket.connected)
 
-      // Handle connection errors
-      socket.on('connect', () => {
+      // Function to handle connection (join interview room)
+      const handleConnected = () => {
         console.log('Interview: Socket connected successfully, socket id:', socket.id, 'user:', user?.id, 'role:', user?.role, 'connected status:', socket.connected)
         console.log('Interview: Previous socket ref:', socketRef.current?.id, 'new socket id:', socket.id)
 
@@ -129,7 +129,17 @@ export default function InterviewRoomPage() {
           console.log('Interview: Joining interview room after socket connect:', interviewId, 'for user:', user?.id, 'role:', user?.role)
           socket.emit('interview:join', { interviewId })
         }, 100)
-      })
+      }
+
+      // Handle connection events
+      socket.on('connect', handleConnected)
+
+      // IMPORTANT: If socket is already connected (reused from another page),
+      // the 'connect' event won't fire again, so we need to manually trigger the join logic
+      if (socket.connected) {
+        console.log('Interview: Socket already connected, triggering join immediately')
+        handleConnected()
+      }
 
       socket.on('disconnect', (reason) => {
         console.log('Interview: Socket disconnected:', reason, 'user:', user?.id, 'role:', user?.role, 'socket id:', socket.id)
@@ -244,11 +254,11 @@ export default function InterviewRoomPage() {
     }
   }
 
-  const createPeerConnection = (targetUserId: string) => {
+  const createPeerConnection = (targetUserId: string): RTCPeerConnection | undefined => {
     const stream = localStreamRef.current
     if (!stream || peerConnectionsRef.current.has(targetUserId)) {
       console.log('createPeerConnection: Skipping - stream:', !!stream, 'already has connection:', peerConnectionsRef.current.has(targetUserId))
-      return null
+      return undefined
     }
 
     const configuration = {

@@ -72,7 +72,9 @@ export default function CodeEditor({ interviewId, socket }: CodeEditorProps) {
             const position = editorRef.current.getPosition()
             const selection = editorRef.current.getSelection()
 
-            model.setValue(changes[0].text || '')
+            const newCode = changes[0].text || ''
+            setCode(newCode)  // Update React state so runCode uses the correct code
+            model.setValue(newCode)
 
             if (position) {
               editorRef.current.setPosition(position)

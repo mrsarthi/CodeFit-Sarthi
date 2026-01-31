@@ -40,8 +40,10 @@ export default function WelcomePage() {
     return null
   }
 
+  // Define quick actions based on user role
   const quickActions = [
-    {
+    // Only show "Start Interview" for interviewers
+    ...(user?.role === 'INTERVIEWER' ? [{
       title: 'Start Interview',
       description: 'Begin a new technical interview session',
       icon: Video,
@@ -49,7 +51,7 @@ export default function WelcomePage() {
       color: 'from-blue-500 to-cyan-500',
       bgColor: 'from-blue-950/50 to-cyan-950/30',
       shadowColor: 'shadow-blue-500/25'
-    },
+    }] : []),
     {
       title: 'Join Interview',
       description: 'Enter an existing interview room',
@@ -151,9 +153,9 @@ export default function WelcomePage() {
           </div>
 
           {/* Quick Actions Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+          <div className="flex flex-wrap justify-center gap-6 mb-20">
             {quickActions.map((action, index) => (
-              <Link key={action.title} href={action.href}>
+              <Link key={action.title} href={action.href} className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(25%-18px)] min-w-[240px] max-w-[300px]">
                 <Card className={`group relative bg-gradient-to-br ${action.bgColor} border-slate-700/50 backdrop-blur-xl hover:border-slate-600/50 transition-all duration-500 hover:shadow-2xl ${action.shadowColor} hover:shadow-2xl hover:-translate-y-2 overflow-hidden cursor-pointer h-full`}>
                   {/* Animated border */}
                   <div className={`absolute inset-0 bg-gradient-to-r ${action.color.replace('500', '500/20')} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg`} />
@@ -239,12 +241,14 @@ export default function WelcomePage() {
               Join thousands of developers who trust CodeFit for their most important technical interviews.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/dashboard/create-interview">
-                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-xl shadow-blue-500/25 rounded-xl px-8 py-4 text-lg font-semibold transform hover:scale-105 transition-all duration-200">
-                  <Zap className="w-5 h-5 mr-2" />
-                  Create New Interview
-                </Button>
-              </Link>
+              {user?.role === 'INTERVIEWER' && (
+                <Link href="/dashboard/create-interview">
+                  <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-xl shadow-blue-500/25 rounded-xl px-8 py-4 text-lg font-semibold transform hover:scale-105 transition-all duration-200">
+                    <Zap className="w-5 h-5 mr-2" />
+                    Create New Interview
+                  </Button>
+                </Link>
+              )}
               <Link href="/dashboard">
                 <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl px-8 py-4 text-lg backdrop-blur-sm">
                   <BarChart3 className="w-5 h-5 mr-2" />
